@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  fullName        String
+  email           String         @unique
+  password        String         
+  avatarUrl       String?
+  resetOtp        String?        
+  resetOtpExpiry  DateTime?      
+  createdAt       DateTime       @default(now())
+
+  wardrobeItems   WardrobeItem[]
+  outfits         Outfit[]
+  notifications   Notification[]
+}
+
+model Category {
+  id            String         @id @default(auto()) @map("_id") @db.ObjectId
+  name          String
+  iconUrl       String?
+
+  wardrobeItems WardrobeItem[]
+  publicItems   PublicItem[]   
+}
+
+model Tag {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  name            String         @unique
+  type            String         
+  
+  wardrobeItemIds String[]       @db.ObjectId
+  wardrobeItems   WardrobeItem[] @relation(fields: [wardrobeItemIds], references: [id])
+
+  publicItemIds   String[]       @db.ObjectId
+  publicItems     PublicItem[]   @relation(fields: [publicItemIds], references: [id])
+}
+
+// BẢNG 1: TỦ ĐỒ CÁ NHÂN CỦA USER
+model WardrobeItem {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String   @db.ObjectId
+  categoryId       String   @db.ObjectId
+  name             String
+  imageUrl         String
+  isSampleItem     Boolean  @default(false)
+  
+  // Các trường chi tiết
+  size             String?  
+  color            String?  
+  material         String?  
+  careInstructions String?  
+  notes            String?  
+
+  createdAt        DateTime @default(now())
+  isDeleted        Boolean  @default(false)
+
+  user             User     @relation(fields: [userId], references: [id])
+  category         Category @relation(fields: [categoryId], references: [id])
+
+  tagIds           String[] @db.ObjectId
+  tags             Tag[]    @relation(fields: [tagIds], references: [id])
+
+  outfitIds        String[] @db.ObjectId
+  outfits          Outfit[] @relation(fields: [outfitIds], references: [id])
+}
+
+// BẢNG 2: KHO ĐỒ MẪU / TÍCH HỢP AFFILIATE
+model PublicItem {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  name             String
+  imageUrl         String
+  categoryId       String   @db.ObjectId
+  affiliateUrl     String?  // Link Shopee/TikTok
+  
+  size             String?  
+  color            String?  
+  material         String?  
+  careInstructions String?  
+  notes            String?  
+
+  createdAt        DateTime @default(now())
+  category         Category @relation(fields: [categoryId], references: [id])
+
+  tagIds           String[] @db.ObjectId
+  tags             Tag[]    @relation(fields: [tagIds], references: [id])
+
+  outfitIds        String[] @db.ObjectId
+  outfits          Outfit[] @relation(fields: [outfitIds], references: [id])
+}
+
+model Outfit {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String         @db.ObjectId
+  name            String
+  canvasImageUrl  String
+  createdAt       DateTime       @default(now())
+
+  user            User           @relation(fields: [userId], references: [id])
+  
+  wardrobeItemIds String[]       @db.ObjectId
+  wardrobeItems   WardrobeItem[] @relation(fields: [wardrobeItemIds], references: [id])
+
+  publicItemIds   String[]       @db.ObjectId
+  publicItems     PublicItem[]   @relation(fields: [publicItemIds], references: [id])
+}
+
+model BodyShapeGuide {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  shapeName       String
+  description     String   
+  stylingAdvice   String   
+  illustrationUrl String
+}
+
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  title     String
+  message   String   
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id])
+}
