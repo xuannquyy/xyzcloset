@@ -40,13 +40,16 @@ Lưu ý: Điện thoại và máy tính phải bắt chung một Wi-Fi.
 npx expo start -c
 
 3. Python AI
-# tải phần mềm 
+# tải phần mềm và cài đặt ban đầu
 https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64.exe
 cd xyzcloset_ai
-# 1. Kích hoạt môi trường ảo venv (Dành cho Windows Powershell / CMD)
+python -m venv venv
 .\venv\Scripts\activate
 pip install -r requirements.txt
-# 2. Chạy lại file server
+# Chạy ứng dụng
+# Kích hoạt môi trường ảo venv (Dành cho Windows Powershell / CMD)
+.\venv\Scripts\activate
+# Chạy lại file server
 python main.py 
 
 
@@ -97,4 +100,5 @@ npx expo install expo-linear-gradient
 vào axiosClient.js đổi const IP_ADDRESS = '192.168.1.2';  thành ip máy tính mình
 npx expo start
 
-
+test api python
+http://127.0.0.1:8000/docs

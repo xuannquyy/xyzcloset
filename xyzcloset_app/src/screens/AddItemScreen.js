@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, View, Text, ScrollView, TouchableOpacity, 
-    TextInput, ActivityIndicator, Alert, Dimensions, Modal
+    TextInput, ActivityIndicator, Dimensions, Modal
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -14,7 +14,6 @@ import axiosClient from '../api/axiosClient';
 
 const { width, height } = Dimensions.get('window');
 
-// BẢNG MÀU VIP
 const COLOR_SWATCHES = [
     { name: 'Đen', hex: '#1C1C1C' }, { name: 'Trắng', hex: '#FFFFFF' },
     { name: 'Navy', hex: '#1C2541' }, { name: 'Nâu/Be', hex: '#D2B48C' },
@@ -25,31 +24,26 @@ const COLOR_SWATCHES = [
 const CLOTHES_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'Freesize'];
 const SHOES_SIZES = ['36', '37', '38', '39', '40', '41', '42', '43'];
 
-// 🟢 NHẬN THÊM `route` ĐỂ LẤY DỮ LIỆU SỬA
 const AddItemScreen = ({ route, navigation }) => {
     const { theme, isDarkMode, t, language } = useContext(SettingsContext);
     
     const itemToEdit = route.params?.itemToEdit;
-    const isEditing = !!itemToEdit; // Cờ kiểm tra đang ở chế độ Sửa
+    const isEditing = !!itemToEdit; 
 
-    // STATES ẢNH & AI
     const [imageUri, setImageUri] = useState(null);
     const [processedImageUri, setProcessedImageUri] = useState(null);
     const [isProcessingAI, setIsProcessingAI] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
-    // STATES DỮ LIỆU CƠ BẢN
     const [name, setName] = useState('');
     const [categories, setCategories] = useState([]);
     const [selectedCategory, setSelectedCategory] = useState(null);
     const [isCatModalVisible, setIsCatModalVisible] = useState(false);
     
-    // STATES THUỘC TÍNH
     const [size, setSize] = useState('');
     const [tags, setTags] = useState([]);
     const [selectedTagIds, setSelectedTagIds] = useState([]);
 
-    // STATES CHI TIẾT MỞ RỘNG
     const [showDetails, setShowDetails] = useState(false);
     const [selectedColorHex, setSelectedColorHex] = useState(null);
     const [customColor, setCustomColor] = useState('');
@@ -57,7 +51,12 @@ const AddItemScreen = ({ route, navigation }) => {
     const [careInstructions, setCareInstructions] = useState('');
     const [notes, setNotes] = useState('');
 
-    // TẢI DATA VÀ PRE-FILL NẾU ĐANG SỬA
+    const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', type: 'error' });
+
+    const showCustomAlert = (title, message, type = 'error') => {
+        setCustomAlert({ visible: true, title, message, type });
+    };
+
     useEffect(() => {
         const fetchFormData = async () => {
             try {
@@ -68,36 +67,30 @@ const AddItemScreen = ({ route, navigation }) => {
                 setCategories(catRes.data);
                 setTags(tagRes.data);
 
-                // 🟢 ĐIỀN SẴN DỮ LIỆU CŨ VÀO FORM
                 if (isEditing) {
                     setName(itemToEdit.name || '');
-                    setImageUri(itemToEdit.imageUrl); // Link ảnh mây cũ
+                    setImageUri(itemToEdit.imageUrl);
                     setSize(itemToEdit.size || '');
                     setMaterial(itemToEdit.material || '');
                     setCareInstructions(itemToEdit.careInstructions || '');
                     setNotes(itemToEdit.notes || '');
 
-                    // Tìm và set Category
                     const matchedCat = catRes.data.find(c => c.id === itemToEdit.categoryId);
                     if (matchedCat) setSelectedCategory(matchedCat);
 
-                    // Set Tags
                     if (itemToEdit.tags && itemToEdit.tags.length > 0) {
                         setSelectedTagIds(itemToEdit.tags.map(t => t.id));
                     }
 
-                    // Set Màu sắc
                     if (itemToEdit.color) {
                         const matchedColor = COLOR_SWATCHES.find(c => c.name === itemToEdit.color);
-                        if (matchedColor) {
-                            setSelectedColorHex(matchedColor.hex);
-                        } else {
+                        if (matchedColor) setSelectedColorHex(matchedColor.hex);
+                        else {
                             setSelectedColorHex('OTHER');
                             setCustomColor(itemToEdit.color);
                         }
                     }
                     
-                    // Tự động bung thẻ chi tiết nếu có thông số ẩn
                     if (itemToEdit.color || itemToEdit.material || itemToEdit.notes || itemToEdit.careInstructions) {
                         setShowDetails(true);
                     }
@@ -109,24 +102,22 @@ const AddItemScreen = ({ route, navigation }) => {
         fetchFormData();
     }, []);
 
-    // GỘP TAGS THEO NHÓM
     const groupedTags = tags.reduce((acc, tag) => {
         acc[tag.type] = acc[tag.type] || [];
         acc[tag.type].push(tag);
         return acc;
     }, {});
 
-    // CHỤP / CHỌN ẢNH
     const pickImage = async (useCamera = false) => {
         let result;
         const options = { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 4], quality: 0.8 };
         if (useCamera) {
             const perm = await ImagePicker.requestCameraPermissionsAsync();
-            if (!perm.granted) return Alert.alert("Cấp quyền", "Vui lòng cấp quyền Camera.");
+            if (!perm.granted) return showCustomAlert("Cấp quyền", "Bạn cần cấp quyền Camera để chụp ảnh.", "error");
             result = await ImagePicker.launchCameraAsync(options);
         } else {
             const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-            if (!perm.granted) return Alert.alert("Cấp quyền", "Vui lòng cấp quyền Thư viện ảnh.");
+            if (!perm.granted) return showCustomAlert("Cấp quyền", "Bạn cần cấp quyền Thư viện để chọn ảnh.", "error");
             result = await ImagePicker.launchImageLibraryAsync(options);
         }
         if (!result.canceled && result.assets.length > 0) {
@@ -135,30 +126,41 @@ const AddItemScreen = ({ route, navigation }) => {
         }
     };
 
-    // TÁCH NỀN AI
     const handleRemoveBackground = async () => { 
         if (!imageUri || imageUri.startsWith('http')) {
-            return Alert.alert("Thông báo", "Bạn cần chọn một bức ảnh mới từ máy để tách nền!");
+            return showCustomAlert("Sai định dạng", "Bạn cần chọn một bức ảnh mới từ thiết bị để AI xử lý tách nền.", "warning");
         }
         setIsProcessingAI(true);
         try {
             const formData = new FormData();
             formData.append('image', { uri: imageUri, type: 'image/jpeg', name: 'raw_item.jpg' });
             const res = await axiosClient.post('/ai/remove-bg', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-            if (res.data && res.data.processedImageUrl) setProcessedImageUri(res.data.processedImageUrl);
+            
+            if (res.data && res.data.processedImageUrl) {
+                setProcessedImageUri(res.data.processedImageUrl);
+                showCustomAlert("Thành công", "Chuyên gia AI đã tách nền xong cho món đồ của bạn!", "success");
+            }
         } catch (error) {
-            Alert.alert("AI Bận", "Hệ thống sẽ dùng ảnh gốc của bạn.");
-            setProcessedImageUri(imageUri); 
+            console.log("Lỗi AI 500:", error);
+            showCustomAlert("Hệ thống gián đoạn", "AI hiện đang quá tải hoặc gặp lỗi. Vui lòng thử lại sau ít phút.", "error");
         } finally {
             setIsProcessingAI(false);
         }
     };
 
-    // 🟢 LƯU DATA (Xử lý thông minh Cả Thêm và Sửa)
     const handleSaveItem = async () => {
         if (!name.trim() || !selectedCategory || (!processedImageUri && !imageUri)) {
-            return Alert.alert("Thiếu thông tin", "Vui lòng điền tên, chọn danh mục và hình ảnh.");
+            return showCustomAlert("Thiếu thông tin", "Vui lòng điền tên, chọn danh mục và hình ảnh.", "warning");
         }
+        
+        if (!processedImageUri && !imageUri.startsWith('http') && !isEditing) {
+             showCustomAlert(
+                 "Lưu ý phông nền", 
+                 "Bức ảnh này chưa được tách nền. Nó có thể hiển thị không đẹp trong Phòng Thử Đồ. Bạn có chắc chắn muốn tiếp tục lưu?", 
+                 "warning"
+             );
+        }
+
         setIsSaving(true);
         try {
             const formData = new FormData();
@@ -166,7 +168,7 @@ const AddItemScreen = ({ route, navigation }) => {
             formData.append('categoryId', selectedCategory.id);
             
             if (selectedTagIds.length > 0) formData.append('tagIds', JSON.stringify(selectedTagIds)); 
-            else formData.append('tagIds', JSON.stringify([])); // Đẩy mảng rỗng nếu user bỏ chọn hết
+            else formData.append('tagIds', JSON.stringify([])); 
             
             const hideSize = selectedCategory.name.match(/Túi|Balo|Phụ kiện|Kính|Mũ|Trang sức/i);
             if (size && !hideSize) formData.append('size', size);
@@ -178,32 +180,35 @@ const AddItemScreen = ({ route, navigation }) => {
             formData.append('careInstructions', careInstructions || '');
             formData.append('notes', notes || '');
 
-            // CHỈ GỬI ẢNH NẾU LÀ ẢNH MỚI CHỤP/TÁCH NỀN (KHÔNG GỬI LINK HTTP CŨ)
             const finalImage = processedImageUri || imageUri;
             if (finalImage && !finalImage.startsWith('http')) {
                 formData.append('image', { uri: finalImage, type: 'image/jpeg', name: 'final.jpg' });
             }
 
-            // Phân nhánh API
             if (isEditing) {
                 await axiosClient.put(`/wardrobe/${itemToEdit.id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
-                Alert.alert("Thành công", "Đã cập nhật thông tin món đồ!");
-                navigation.navigate('MainTabs', { screen: 'Wardrobe' }); // Quay thẳng về tủ đồ
+                navigation.navigate('MainApp', { screen: 'Wardrobe' }); 
             } else {
                 await axiosClient.post('/wardrobe', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
                 navigation.goBack();
             }
         } catch (error) {
-            Alert.alert("Lỗi", "Không thể lưu lúc này.");
+            showCustomAlert("Lỗi lưu trữ", "Không thể lưu món đồ vào lúc này. Vui lòng kiểm tra lại kết nối.", "error");
         } finally {
             setIsSaving(false);
         }
     };
 
+    // Xác định màu nền của icon tuỳ thuộc vào loại thông báo (Dùng màu giao thông chuẩn)
+    const getAlertIconColor = () => {
+        if (customAlert.type === 'success') return '#27AE60';
+        if (customAlert.type === 'warning') return '#F39C12';
+        return '#E43F5A'; 
+    };
+
     return (
         <ScreenWrapper style={{ backgroundColor: theme.background }}>
             
-            {/* 1. HEADER VIP ĐỔI TITLE THEO CHẾ ĐỘ */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconBtn}>
                     <Ionicons name="close" size={30} color={theme.text} />
@@ -218,17 +223,15 @@ const AddItemScreen = ({ route, navigation }) => {
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 50 }}>
                 
-                {/* 2. KHU VỰC ẢNH STUDIO MA THUẬT */}
                 <View style={styles.imageSection}>
                     <View style={[styles.glowOrb, { backgroundColor: theme.accent }]} />
-                    <View style={[styles.imageWrapper, { backgroundColor: isDarkMode ? '#1C2541' : '#FFF' }]}>
+                    <View style={[styles.imageWrapper, { backgroundColor: theme.card }]}>
                         {imageUri || processedImageUri ? (
                             <>
                                 <Image source={{ uri: processedImageUri || imageUri }} style={styles.previewImage} contentFit="contain" />
-                                {/* Chỉ hiện nút AI nếu ảnh chưa tách nền và là ảnh trong máy (không phải ảnh http cũ) */}
                                 {!processedImageUri && imageUri && !imageUri.startsWith('http') && (
                                     <TouchableOpacity onPress={handleRemoveBackground} disabled={isProcessingAI} style={styles.aiBtnWrapper}>
-                                        <LinearGradient colors={['#F6D365', '#FDA085']} style={styles.aiBtn3D} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
+                                        <LinearGradient colors={[theme.primary, theme.accent]} style={styles.aiBtn3D} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                                             {isProcessingAI ? <ActivityIndicator size="small" color="#FFF" /> : (
                                                 <><MaterialCommunityIcons name="magic-staff" size={24} color="#FFF" /><Text style={styles.aiBtnText}>Tách Nền Bằng AI</Text></>
                                             )}
@@ -256,17 +259,14 @@ const AddItemScreen = ({ route, navigation }) => {
                     </View>
                 </View>
 
-                {/* 3. KHỐI FORM NỔI 3D */}
-                <View style={[styles.formContainer, { backgroundColor: isDarkMode ? '#111A33' : '#FFFFFF' }]}>
+                <View style={[styles.formContainer, { backgroundColor: theme.card }]}>
                     
-                    {/* TÊN MÓN ĐỒ */}
                     <Text style={[styles.label, { color: theme.text }]}>{t('item_name')}</Text>
                     <View style={[styles.inputBox, { backgroundColor: theme.background }]}>
                         <Ionicons name="pricetag-outline" size={22} color={theme.primary} style={{ marginRight: 10 }} />
                         <TextInput style={[styles.input, { color: theme.text }]} placeholder={t('item_name_placeholder')} placeholderTextColor={theme.gray} value={name} onChangeText={setName} />
                     </View>
 
-                    {/* DROP DOWN DANH MỤC */}
                     <Text style={[styles.label, { color: theme.text, marginTop: 25 }]}>{t('category')}</Text>
                     <TouchableOpacity style={[styles.inputBox, { backgroundColor: theme.background }]} activeOpacity={0.7} onPress={() => setIsCatModalVisible(true)}>
                         <Text style={{ flex: 1, fontFamily: FONTS.medium, fontSize: 16, color: selectedCategory ? theme.text : theme.gray }}>
@@ -275,7 +275,6 @@ const AddItemScreen = ({ route, navigation }) => {
                         <Ionicons name="chevron-down-circle" size={26} color={theme.primary} />
                     </TouchableOpacity>
 
-                    {/* KHỐI KÍCH CỠ (SIZE) */}
                     {selectedCategory && !selectedCategory.name.match(/Túi|Balo|Phụ kiện|Kính|Mũ|Trang sức/i) && (
                         <View style={styles.sizeSection}>
                             <Text style={[styles.label, { color: theme.text }]}>Kích cỡ (Size)</Text>
@@ -298,7 +297,6 @@ const AddItemScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* TAGS PHÂN LOẠI */}
                     {Object.keys(groupedTags).length > 0 && (
                         <View style={{ marginTop: 30 }}>
                             <Text style={[styles.label, { color: theme.text, marginBottom: 5 }]}>{t('tags')}</Text>
@@ -322,20 +320,18 @@ const AddItemScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* THẺ MỞ RỘNG (ACCORDION) */}
                     <TouchableOpacity style={styles.accordionHeaderBtn} activeOpacity={0.9} onPress={() => setShowDetails(!showDetails)}>
                         <LinearGradient colors={showDetails ? [theme.accent, theme.primary] : [theme.primary, theme.primary]} style={styles.accordionGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                             <View style={styles.accordionContent}>
                                 <Ionicons name="sparkles" size={22} color="#FFF" style={{ marginRight: 10 }} />
                                 <Text style={styles.accordionTitle}>
-                                    {language === 'vi' ? 'Thông tin chi tiết' : 'Extra Details (Color, Material...)'}
+                                    {language === 'vi' ? 'Thông tin chi tiết' : 'Extra Details'}
                                 </Text>
                             </View>
                             <Ionicons name={showDetails ? "chevron-up-circle" : "chevron-down-circle"} size={26} color="#FFF" />
                         </LinearGradient>
                     </TouchableOpacity>
 
-                    {/* NỘI DUNG CHI TIẾT */}
                     {showDetails && (
                         <View style={[styles.extraDetailsCard, { backgroundColor: theme.background, borderColor: theme.border }]}>
                             
@@ -359,25 +355,44 @@ const AddItemScreen = ({ route, navigation }) => {
                                 })}
                             </View>
                             {selectedColorHex === 'OTHER' && (
-                                <TextInput style={[styles.inputBox, { backgroundColor: isDarkMode ? '#111A33' : '#FFF', marginTop: 15, color: theme.text }]}
+                                <TextInput style={[styles.inputBox, { backgroundColor: theme.card, marginTop: 15, color: theme.text }]}
                                     placeholder="Nhập màu sắc..." placeholderTextColor={theme.gray} value={customColor} onChangeText={setCustomColor} />
                             )}
 
                             <Text style={[styles.label, { color: theme.text, marginTop: 25 }]}>Chất liệu</Text>
-                            <TextInput style={[styles.inputBox, { backgroundColor: isDarkMode ? '#111A33' : '#FFF', color: theme.text }]}
+                            <TextInput style={[styles.inputBox, { backgroundColor: theme.card, color: theme.text }]}
                                 placeholder="VD: Cotton, Denim, Linen..." placeholderTextColor={theme.gray} value={material} onChangeText={setMaterial} />
 
                             <Text style={[styles.label, { color: theme.text, marginTop: 25 }]}>Bảo quản & Giặt ủi</Text>
-                            <TextInput style={[styles.inputBox, { backgroundColor: isDarkMode ? '#111A33' : '#FFF', color: theme.text }]}
+                            <TextInput style={[styles.inputBox, { backgroundColor: theme.card, color: theme.text }]}
                                 placeholder="VD: Giặt tay, không tẩy..." placeholderTextColor={theme.gray} value={careInstructions} onChangeText={setCareInstructions} />
 
                             <Text style={[styles.label, { color: theme.text, marginTop: 25 }]}>Ghi chú thêm</Text>
-                            <TextInput style={[styles.inputBox, { backgroundColor: isDarkMode ? '#111A33' : '#FFF', color: theme.text, height: 100, textAlignVertical: 'top', paddingTop: 18 }]}
+                            <TextInput style={[styles.inputBox, { backgroundColor: theme.card, color: theme.text, height: 100, textAlignVertical: 'top', paddingTop: 18 }]}
                                 placeholder="Tình trạng, điểm nổi bật..." placeholderTextColor={theme.gray} multiline value={notes} onChangeText={setNotes} />
                         </View>
                     )}
                 </View>
             </ScrollView>
+
+            {/* 🟢 CUSTOM LUXURY ALERT MODAL ĐÃ ĐƯỢC ĐỒNG BỘ THEME */}
+            <Modal visible={customAlert.visible} transparent={true} animationType="fade">
+                <View style={styles.alertOverlay}>
+                    <View style={[styles.alertBox, { backgroundColor: theme.card }]}>
+                        <View style={[styles.alertIconWrapper, { backgroundColor: getAlertIconColor(), borderColor: theme.card }]}>
+                            <Ionicons 
+                                name={customAlert.type === 'success' ? "checkmark-circle" : customAlert.type === 'warning' ? "warning" : "close-circle"} 
+                                size={40} color="#FFF" 
+                            />
+                        </View>
+                        <Text style={[styles.alertTitle, { color: theme.text }]}>{customAlert.title}</Text>
+                        <Text style={[styles.alertMessage, { color: theme.gray }]}>{customAlert.message}</Text>
+                        <TouchableOpacity style={[styles.alertBtn, { backgroundColor: theme.primary }]} onPress={() => setCustomAlert({ ...customAlert, visible: false })}>
+                            <Text style={[styles.alertBtnText, { color: '#FFF' }]}>Đã hiểu</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
 
             {/* MODAL DANH MỤC */}
             <Modal visible={isCatModalVisible} animationType="slide" transparent={true} onRequestClose={() => setIsCatModalVisible(false)}>
@@ -417,12 +432,12 @@ const styles = StyleSheet.create({
     saveText: { fontFamily: FONTS.bold, fontSize: 15, color: '#FFF' },
     
     imageSection: { width: '100%', height: width * 1.15, alignItems: 'center', paddingTop: 20, marginBottom: 20 },
-    glowOrb: { position: 'absolute', width: 220, height: 220, borderRadius: 110, top: '15%', opacity: 0.25, filter: 'blur(40px)' }, 
-    imageWrapper: { width: '85%', height: '90%', borderRadius: 40, overflow: 'hidden', borderWidth: 1, backgroundColor: '#FFF', elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.15, shadowRadius: 25 },
+    glowOrb: { position: 'absolute', width: 220, height: 220, borderRadius: 110, top: '15%', opacity: 0.25 }, 
+    imageWrapper: { width: '85%', height: '90%', borderRadius: 40, overflow: 'hidden', borderWidth: 1, elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.15, shadowRadius: 25 },
     previewImage: { width: '100%', height: '100%' },
     
     aiBtnWrapper: { position: 'absolute', bottom: 35, alignSelf: 'center' },
-    aiBtn3D: { flexDirection: 'row', paddingHorizontal: 35, paddingVertical: 18, borderRadius: 30, alignItems: 'center', elevation: 12, shadowColor: '#FDA085', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 10 },
+    aiBtn3D: { flexDirection: 'row', paddingHorizontal: 35, paddingVertical: 18, borderRadius: 30, alignItems: 'center', elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10 },
     aiBtnText: { fontFamily: FONTS.bold, color: '#FFF', fontSize: 16, marginLeft: 10, letterSpacing: 0.5 },
     
     repickBtn: { position: 'absolute', top: 20, right: 20, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
@@ -456,6 +471,14 @@ const styles = StyleSheet.create({
     swatchGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 18 },
     swatchOuter: { width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FFF', elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 5 },
     swatchInner: { width: 44, height: 44, borderRadius: 22 },
+
+    alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+    alertBox: { width: '80%', borderRadius: 30, padding: 30, alignItems: 'center', elevation: 20, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.3, shadowRadius: 20 },
+    alertIconWrapper: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginTop: -60, borderWidth: 4, elevation: 10 },
+    alertTitle: { fontFamily: FONTS.bold, fontSize: 22, marginTop: 15, marginBottom: 10, textAlign: 'center' },
+    alertMessage: { fontFamily: FONTS.medium, fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 25 },
+    alertBtn: { width: '100%', paddingVertical: 15, borderRadius: 20, alignItems: 'center' },
+    alertBtnText: { fontFamily: FONTS.bold, fontSize: 16 },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'flex-end' },
     bottomSheet: { height: height * 0.65, borderTopLeftRadius: 40, borderTopRightRadius: 40, paddingHorizontal: 25, paddingTop: 20, elevation: 40 },
