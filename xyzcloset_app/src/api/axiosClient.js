@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage'; // Cần cài thêm thư viện này
 
-const IP_ADDRESS = '192.168.1.7'; 
+const IP_ADDRESS = '192.168.100.27'; 
 
 const axiosClient = axios.create({
     baseURL: `http://${IP_ADDRESS}:5000/api`,

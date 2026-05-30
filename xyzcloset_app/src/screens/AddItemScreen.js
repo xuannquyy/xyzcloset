@@ -110,7 +110,8 @@ const AddItemScreen = ({ route, navigation }) => {
 
     const pickImage = async (useCamera = false) => {
         let result;
-        const options = { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 4], quality: 0.8 };
+        // Đã giảm quality xuống 0.4 để file nhẹ hơn, gửi đi nhanh hơn
+        const options = { mediaTypes: ['images'], allowsEditing: true, aspect: [3, 4], quality: 0.4 };
         if (useCamera) {
             const perm = await ImagePicker.requestCameraPermissionsAsync();
             if (!perm.granted) return showCustomAlert("Cấp quyền", "Bạn cần cấp quyền Camera để chụp ảnh.", "error");
@@ -133,16 +134,39 @@ const AddItemScreen = ({ route, navigation }) => {
         setIsProcessingAI(true);
         try {
             const formData = new FormData();
-            formData.append('image', { uri: imageUri, type: 'image/jpeg', name: 'raw_item.jpg' });
-            const res = await axiosClient.post('/ai/remove-bg', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
+            
+            const filename = imageUri.split('/').pop() || 'raw_item.jpg';
+            const match = /\.(\w+)$/.exec(filename);
+            const type = match ? `image/${match[1] === 'jpg' ? 'jpeg' : match[1]}` : `image/jpeg`;
+
+            formData.append('image', { 
+                uri: imageUri, 
+                type: type, 
+                name: filename 
+            });
+            
+            // Đã thêm Header và Timeout 15 giây
+            const res = await axiosClient.post('/ai/remove-bg', formData, { 
+                headers: { 
+                    'Content-Type': 'multipart/form-data',
+                    'Accept': 'application/json' 
+                },
+                timeout: 15000 
+            });
             
             if (res.data && res.data.processedImageUrl) {
-                setProcessedImageUri(res.data.processedImageUrl);
+                const bypassCacheUrl = `${res.data.processedImageUrl}?v=${Date.now()}`;
+                setProcessedImageUri(bypassCacheUrl);
                 showCustomAlert("Thành công", "Chuyên gia AI đã tách nền xong cho món đồ của bạn!", "success");
             }
         } catch (error) {
-            console.log("Lỗi AI 500:", error);
-            showCustomAlert("Hệ thống gián đoạn", "AI hiện đang quá tải hoặc gặp lỗi. Vui lòng thử lại sau ít phút.", "error");
+            console.log("Lỗi AI 500 hoặc Timeout:", error);
+            // Xử lý lỗi khi server quá tải / mạng chậm
+            if (error.code === 'ECONNABORTED') {
+                showCustomAlert("Hết thời gian", "Server xử lý quá lâu (hơn 15s), vui lòng thử lại ảnh khác.", "error");
+            } else {
+                showCustomAlert("Hệ thống gián đoạn", "AI hiện đang quá tải hoặc gặp lỗi. Vui lòng thử lại sau ít phút.", "error");
+            }
         } finally {
             setIsProcessingAI(false);
         }
@@ -199,7 +223,6 @@ const AddItemScreen = ({ route, navigation }) => {
         }
     };
 
-    // Xác định màu nền của icon tuỳ thuộc vào loại thông báo (Dùng màu giao thông chuẩn)
     const getAlertIconColor = () => {
         if (customAlert.type === 'success') return '#27AE60';
         if (customAlert.type === 'warning') return '#F39C12';
@@ -225,10 +248,22 @@ const AddItemScreen = ({ route, navigation }) => {
                 
                 <View style={styles.imageSection}>
                     <View style={[styles.glowOrb, { backgroundColor: theme.accent }]} />
-                    <View style={[styles.imageWrapper, { backgroundColor: theme.card }]}>
+                    <View style={[
+                        styles.imageWrapper, 
+                        { backgroundColor: processedImageUri ? '#F5F5F7' : theme.card } 
+                    ]}>
+                        
+                        {processedImageUri && <View style={styles.studioLighting} />}
+
                         {imageUri || processedImageUri ? (
                             <>
-                                <Image source={{ uri: processedImageUri || imageUri }} style={styles.previewImage} contentFit="contain" />
+                                <Image 
+                                    source={{ uri: processedImageUri || imageUri }} 
+                                    style={styles.previewImage} 
+                                    contentFit="contain" 
+                                    transition={600}
+                                    cachePolicy="none" // Đã thêm để xoá lỗi bóng ma
+                                />
                                 {!processedImageUri && imageUri && !imageUri.startsWith('http') && (
                                     <TouchableOpacity onPress={handleRemoveBackground} disabled={isProcessingAI} style={styles.aiBtnWrapper}>
                                         <LinearGradient colors={[theme.primary, theme.accent]} style={styles.aiBtn3D} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
@@ -375,7 +410,6 @@ const AddItemScreen = ({ route, navigation }) => {
                 </View>
             </ScrollView>
 
-            {/* 🟢 CUSTOM LUXURY ALERT MODAL ĐÃ ĐƯỢC ĐỒNG BỘ THEME */}
             <Modal visible={customAlert.visible} transparent={true} animationType="fade">
                 <View style={styles.alertOverlay}>
                     <View style={[styles.alertBox, { backgroundColor: theme.card }]}>
@@ -394,7 +428,6 @@ const AddItemScreen = ({ route, navigation }) => {
                 </View>
             </Modal>
 
-            {/* MODAL DANH MỤC */}
             <Modal visible={isCatModalVisible} animationType="slide" transparent={true} onRequestClose={() => setIsCatModalVisible(false)}>
                 <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsCatModalVisible(false)}>
                     <View style={[styles.bottomSheet, { backgroundColor: theme.background }]}>
@@ -434,13 +467,29 @@ const styles = StyleSheet.create({
     imageSection: { width: '100%', height: width * 1.15, alignItems: 'center', paddingTop: 20, marginBottom: 20 },
     glowOrb: { position: 'absolute', width: 220, height: 220, borderRadius: 110, top: '15%', opacity: 0.25 }, 
     imageWrapper: { width: '85%', height: '90%', borderRadius: 40, overflow: 'hidden', borderWidth: 1, elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 15 }, shadowOpacity: 0.15, shadowRadius: 25 },
-    previewImage: { width: '100%', height: '100%' },
     
-    aiBtnWrapper: { position: 'absolute', bottom: 35, alignSelf: 'center' },
+    studioLighting: {
+        position: 'absolute',
+        width: '70%',
+        height: '70%',
+        backgroundColor: '#FFFFFF',
+        borderRadius: 200,
+        top: '15%',
+        alignSelf: 'center',
+        shadowColor: '#FFFFFF',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 50,
+        elevation: 20,
+        zIndex: 0,
+    },
+    previewImage: { width: '100%', height: '100%', zIndex: 1 },
+    
+    aiBtnWrapper: { position: 'absolute', bottom: 35, alignSelf: 'center', zIndex: 2 },
     aiBtn3D: { flexDirection: 'row', paddingHorizontal: 35, paddingVertical: 18, borderRadius: 30, alignItems: 'center', elevation: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.3, shadowRadius: 10 },
     aiBtnText: { fontFamily: FONTS.bold, color: '#FFF', fontSize: 16, marginLeft: 10, letterSpacing: 0.5 },
     
-    repickBtn: { position: 'absolute', top: 20, right: 20, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)' },
+    repickBtn: { position: 'absolute', top: 20, right: 20, width: 48, height: 48, borderRadius: 24, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.4)', zIndex: 2 },
 
     placeholderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
     placeholderText: { fontFamily: FONTS.medium, fontSize: 17, marginVertical: 30 },
