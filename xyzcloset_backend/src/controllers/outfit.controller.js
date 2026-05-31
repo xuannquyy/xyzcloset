@@ -5,19 +5,25 @@ const prisma = new PrismaClient();
 const createOutfit = async (req, res) => {
     try {
         const userId = req.userId;
-        const { name, wardrobeItemIds } = req.body;
+        // 🟢 Bổ sung tagIds vào req.body
+        const { name, wardrobeItemIds, tagIds } = req.body;
 
-        // Bắt buộc phải có ảnh ghép của set đồ
         if (!req.file) {
             return res.status(400).json({ message: "Vui lòng cung cấp ảnh ghép của Set đồ!" });
         }
         const canvasImageUrl = req.file.path;
 
-        // Xử lý mảng ID quần áo được gửi lên
         let parsedItemIds = [];
         if (wardrobeItemIds) {
             try { parsedItemIds = JSON.parse(wardrobeItemIds); } 
             catch { parsedItemIds = Array.isArray(wardrobeItemIds) ? wardrobeItemIds : [wardrobeItemIds]; }
+        }
+
+        // 🟢 Xử lý mảng Tag
+        let parsedTagIds = [];
+        if (tagIds) {
+            try { parsedTagIds = JSON.parse(tagIds); } 
+            catch { parsedTagIds = Array.isArray(tagIds) ? tagIds : [tagIds]; }
         }
 
         const newOutfit = await prisma.outfit.create({
@@ -25,7 +31,8 @@ const createOutfit = async (req, res) => {
                 name,
                 canvasImageUrl,
                 userId,
-                wardrobeItemIds: parsedItemIds
+                wardrobeItemIds: parsedItemIds,
+                tagIds: parsedTagIds // 🟢 Lưu Tag vào DB
             }
         });
 
@@ -41,7 +48,8 @@ const getMyOutfits = async (req, res) => {
         const outfits = await prisma.outfit.findMany({
             where: { userId: req.userId },
             include: {
-                wardrobeItems: true // Tự động móc nối lấy chi tiết các món đồ có trong Set này
+                wardrobeItems: true,
+                tags: true // Bổ sung dòng này để lấy thông tin thẻ
             },
             orderBy: { createdAt: 'desc' }
         });

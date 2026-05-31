@@ -41,6 +41,9 @@ model Tag {
 
   publicItemIds   String[]       @db.ObjectId
   publicItems     PublicItem[]   @relation(fields: [publicItemIds], references: [id])
+
+  outfitIds       String[]       @db.ObjectId
+  outfits         Outfit[]       @relation(fields: [outfitIds], references: [id])
 }
 
 // BẢNG 1: TỦ ĐỒ CÁ NHÂN CỦA USER
@@ -110,6 +113,9 @@ model Outfit {
 
   publicItemIds   String[]       @db.ObjectId
   publicItems     PublicItem[]   @relation(fields: [publicItemIds], references: [id])
+
+  tagIds          String[]       @db.ObjectId
+  tags            Tag[]          @relation(fields: [tagIds], references: [id])
 }
 
 model BodyShapeGuide {

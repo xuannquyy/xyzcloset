@@ -67,6 +67,7 @@ npm install prisma@5 @prisma/client@5 nodemon --save-dev
 npm install cloudinary multer multer-storage-cloudinary --legacy-peer-deps
 npm install nodemailer --legacy-peer-deps
 npm install axios --legacy-peer-deps
+npm install replicate --legacy-peer-deps
 # Khởi tạo Prisma kết nối với MongoDB:
 npx prisma init
 # (Để hệ thống nhận diện cấu trúc mới).
@@ -93,7 +94,10 @@ npx expo install react-native-view-shot
 npx expo install expo-location
 npx expo install expo-image
 npx expo install expo-linear-gradient
+npm install react-native-chart-kit react-native-svg
 
+3. chạy quét lại venv
+pip freeze > requirements.txt
 
 
 

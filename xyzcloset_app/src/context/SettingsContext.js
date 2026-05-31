@@ -118,6 +118,14 @@ export const SettingsProvider = ({ children }) => {
             camera_permission_required: "Bạn cần cấp quyền Camera để AI có thể phân tích dáng người!",
             warning_title: "Cảnh báo",
             notice_title: "Thông báo",
+            buy_now: "Mua ngay",
+            total_outfits: "Tổng số set đồ",
+            harmony: "Sự hài hòa",
+            tab_insights: "Thống kê",
+            fav_colors: "Tông màu chủ đạo",
+            ai_suggestion_title: "AI Gợi ý riêng",
+            ai_suggestion_desc: "Dựa trên phong cách của bạn, đây là những gợi ý tối ưu nhất.",
+            view_suggestions: "Xem chi tiết",
         },
         en: {
             profile_title: "Your Profile",
@@ -206,6 +214,15 @@ export const SettingsProvider = ({ children }) => {
             camera_permission_required: "Camera permission is required for AI analysis!",
             warning_title: "Warning",
             notice_title: "Notice",
+            tab_suggest: "Suggestions",
+            buy_now: "Buy Now",
+            total_outfits: "Total Outfits",
+            harmony: "Harmony",
+            tab_insights: "Insights",
+            fav_colors: "Color Palette",
+            ai_suggestion_title: "AI Suggestions",
+            ai_suggestion_desc: "Based on your closet, these are the best styles for you.",
+            view_suggestions: "View Details",
         }
     };
 

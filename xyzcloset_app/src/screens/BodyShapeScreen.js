@@ -1,48 +1,49 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, View, Text, ScrollView, TouchableOpacity, 
-    ActivityIndicator, Alert, Dimensions, Modal 
+    ActivityIndicator, Dimensions, Modal, StatusBar
 } from 'react-native';
 import { Image } from 'expo-image';
-import ScreenWrapper from '../components/ScreenWrapper';
-import { FONTS, SIZES } from '../theme/theme';
+import { FONTS } from '../theme/theme';
 import { SettingsContext } from '../context/SettingsContext';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import axiosClient from '../api/axiosClient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const { width, height } = Dimensions.get('window');
 
-// DỮ LIỆU DỰ PHÒNG CHO TÍNH NĂNG "CHỌN LẠI DÁNG" (Manual Override)
+// 🟢 MAP CHUẨN XÁC TÊN VỚI DATABASE TRONG SEED.JS
 const MANUAL_SHAPES = [
-    { name: "Dáng Quả Lê", icon: "fruit-pear" },
-    { name: "Dáng Đồng Hồ Cát", icon: "timer-sand" },
-    { name: "Dáng Chữ Nhật", icon: "shape-rectangle-plus" },
-    { name: "Dáng Tam Giác Ngược", icon: "triangle-down" },
-    { name: "Dáng Quả Táo", icon: "apple" }
+    { name: "Dáng Quả Lê (Pear)", icon: "fruit-pear" },
+    { name: "Dáng Đồng Hồ Cát (Hourglass)", icon: "timer-sand" },
+    { name: "Dáng Chữ Nhật (Rectangle)", icon: "shape-rectangle-plus" },
+    { name: "Dáng Tam Giác Ngược (Inverted Triangle)", icon: "triangle-down" },
+    { name: "Dáng Quả Táo (Apple)", icon: "apple" }
 ];
 
+const LUXURY_FALLBACK_IMAGE = "https://images.unsplash.com/photo-1483985988355-763728e1935b?q=80&w=1000&auto=format&fit=crop";
+
 const BodyShapeScreen = ({ route, navigation }) => {
-    const { imageUri } = route.params; 
-    const { theme, language } = useContext(SettingsContext);
+    const { imageUri, manualShape } = route.params; 
+    const { theme, isDarkMode } = useContext(SettingsContext);
 
     const [status, setStatus] = useState('analyzing'); 
     const [resultData, setResultData] = useState(null);
     const [isManualModalVisible, setManualModalVisible] = useState(false);
 
     useEffect(() => {
-        analyzeImage();
-    }, []);
+        if (manualShape) {
+            handleManualSelect(manualShape, true);
+        } else {
+            analyzeImage();
+        }
+    }, [manualShape]);
 
     const analyzeImage = async () => {
         try {
             const formData = new FormData();
-            formData.append('image', {
-                uri: imageUri,
-                type: 'image/jpeg',
-                name: 'scan_bodyshape.jpg'
-            });
+            formData.append('image', { uri: imageUri, type: 'image/jpeg', name: 'scan_bodyshape.jpg' });
 
-            // GỌI THẲNG LÊN NODE.JS
             const response = await axiosClient.post('/body-shapes/analyze', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
@@ -51,47 +52,42 @@ const BodyShapeScreen = ({ route, navigation }) => {
                 setResultData(response.data);
                 setStatus('success');
             } else {
-                throw new Error("Lỗi trả về từ server");
+                throw new Error("Lỗi server");
             }
         } catch (error) {
-            console.log("Lỗi phân tích:", error);
             setStatus('error');
-            const errorMsg = error.response?.data?.message || (language === 'vi' ? "Đã xảy ra sự cố. Vui lòng chụp lại ảnh." : "An error occurred. Please retake the photo.");
-            Alert.alert(language === 'vi' ? "Phân tích thất bại" : "Analysis Failed", errorMsg);
         }
     };
 
-    // Hàm gọi lại API lấy lời khuyên khi người dùng tự chọn dáng
-    const handleManualSelect = async (shapeName) => {
+    const handleManualSelect = async (shapeName, isInitialBypass = false) => {
         setManualModalVisible(false);
-        // Cập nhật tạm thời UI để không bị gián đoạn
-        setResultData(prev => ({ ...prev, shapeResult: shapeName, metrics: null }));
+        if (!isInitialBypass) setStatus('analyzing'); 
         
         try {
-            // Lấy lại danh sách cẩm nang từ Backend để đắp dữ liệu mới vào
             const guidesRes = await axiosClient.get('/body-shapes');
-            const selectedGuide = guidesRes.data.find(g => g.shapeName.includes(shapeName.split(' ')[1]));
-            if (selectedGuide) {
-                setResultData(prev => ({ ...prev, advice: selectedGuide }));
-            }
+            const targetShape = shapeName.split(' (')[0]; 
+            const selectedGuide = guidesRes.data.find(g => g.shapeName.includes(targetShape));
+            
+            setResultData({ 
+                shapeResult: selectedGuide ? selectedGuide.shapeName : shapeName, 
+                advice: selectedGuide || null,
+                analyzedImageUrl: selectedGuide?.illustrationUrl || LUXURY_FALLBACK_IMAGE 
+            });
+            setStatus('success');
         } catch (error) {
-            console.log("Lỗi lấy dữ liệu dáng mới:", error);
+            setStatus('error');
         }
     };
 
     if (status === 'analyzing') {
         return (
-            <View style={[styles.loadingContainer, { backgroundColor: '#1C2541' }]}>
-                <Image source={{ uri: imageUri }} style={styles.scanningImage} contentFit="cover" opacity={0.4} />
-                <View style={styles.overlay}>
-                    <ActivityIndicator size="large" color="#E5B05C" />
-                    <Text style={styles.scanningText}>
-                        {language === 'vi' ? "AI đang phân tích khung xương..." : "AI is analyzing body frame..."}
-                    </Text>
-                    <Text style={styles.scanningSubText}>
-                        {language === 'vi' ? "Quá trình này mất khoảng 3-5 giây" : "This takes about 3-5 seconds"}
-                    </Text>
+            <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
+                <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+                <View style={[styles.radarBox, { backgroundColor: theme.card }]}>
+                    <MaterialCommunityIcons name="line-scan" size={50} color={theme.primary} />
                 </View>
+                <Text style={[styles.scanningText, { color: theme.text }]}>Đang phân tích tỷ lệ vàng...</Text>
+                <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 20 }} />
             </View>
         );
     }
@@ -99,236 +95,240 @@ const BodyShapeScreen = ({ route, navigation }) => {
     if (status === 'error') {
         return (
             <View style={[styles.loadingContainer, { backgroundColor: theme.background }]}>
-                <Ionicons name="alert-circle-outline" size={60} color="#FF4B4B" />
-                <Text style={[styles.errorText, { color: theme.text }]}>
-                    {language === 'vi' ? "Không thể quét được khung xương" : "Could not scan body frame"}
-                </Text>
+                <Ionicons name="alert-circle-outline" size={70} color="#E43F5A" style={{ marginBottom: 20 }} />
+                <Text style={[styles.errorText, { color: theme.text }]}>Phân tích không thành công</Text>
+                <Text style={[styles.errorSubText, { color: theme.gray }]}>Xin lỗi, ảnh của bạn có thể chưa đủ sáng hoặc AI không nhận diện được khung xương.</Text>
                 <TouchableOpacity style={[styles.btnRetry, { backgroundColor: theme.primary }]} onPress={() => navigation.goBack()}>
-                    <Text style={styles.btnRetryText}>{language === 'vi' ? "Chụp lại ảnh" : "Retake Photo"}</Text>
+                    <Text style={[styles.btnRetryText, { color: theme.background }]}>Thử lại với ảnh khác</Text>
                 </TouchableOpacity>
             </View>
         );
     }
 
-    const getIcon = (shapeName) => {
-        if(shapeName?.includes("Lê")) return "fruit-pear";
-        if(shapeName?.includes("Đồng Hồ Cát")) return "timer-sand";
-        if(shapeName?.includes("Táo")) return "apple";
-        if(shapeName?.includes("Tam Giác")) return "triangle-down";
-        return "shape-rectangle-plus";
-    };
-
-    // -------------------------------------------------------------
-    // XỬ LÝ DỮ LIỆU JSON TỪ CƠ SỞ DỮ LIỆU (Parse JSON an toàn)
-    // -------------------------------------------------------------
+    // XỬ LÝ DỮ LIỆU JSON TỪ DATABASE
     let parsedAdvice = { advantages: [], toWear: [], toAvoid: [] };
     let rawAdviceStr = resultData?.advice?.stylingAdvice;
-
     try {
         if (rawAdviceStr) {
-            // Cố gắng dịch chuỗi JSON từ Database
             const parsed = JSON.parse(rawAdviceStr);
-            if (parsed.advantages) {
-                parsedAdvice = parsed;
-            }
+            if (parsed.advantages) parsedAdvice = parsed;
         }
     } catch (e) {
-        // Nếu DB đang chứa text thường (chưa cập nhật JSON), đổ tạm vào mảng advantages
-        parsedAdvice.advantages = [rawAdviceStr || (language === 'vi' ? "Hãy tự tin mặc những gì bạn thích!" : "Wear what makes you confident!")];
+        parsedAdvice.advantages = [rawAdviceStr || "Hãy tự tin diện những trang phục bạn yêu thích!"];
     }
 
-    // Lấy màu nền Pastel hồng/cam tùy thuộc vào theme để khớp với thiết kế UI của ông
-    const cardBgColor = isDarkMode(theme) ? '#2A1F2D' : '#F7D6D6';
-    const cardItemColor = isDarkMode(theme) ? '#3E2A35' : '#FFF0F0';
-    const accentColor = '#B85065'; // Màu nhấn chữ đỏ rượu như thiết kế
-
-    // Hàm phụ trợ kiểm tra Dark Mode
-    function isDarkMode(t) { return t.background === '#121212'; }
+    // Lọc lại tên hiển thị (Bỏ tiếng Anh để Title gọn và sang hơn)
+    const displayName = resultData.shapeResult.split(' (')[0];
+    const highlightColor = theme.primary;
 
     return (
-        <ScreenWrapper style={{ backgroundColor: theme.background }}>
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 50 }}>
+        <View style={[styles.container, { backgroundColor: theme.background }]}>
+            <StatusBar barStyle={isDarkMode ? "light-content" : "dark-content"} />
+            
+            {/* NÚT BACK CHUẨN XỊN (Nổi trên cùng) */}
+            <SafeAreaView style={styles.headerAbsolute}>
+                <TouchableOpacity style={[styles.backBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]} onPress={() => navigation.goBack()}>
+                    <Ionicons name="chevron-back" size={24} color={theme.text} />
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.tuneBtn, { backgroundColor: theme.card, borderColor: theme.border, borderWidth: 1 }]} onPress={() => setManualModalVisible(true)}>
+                    <Ionicons name="options-outline" size={20} color={theme.text} />
+                </TouchableOpacity>
+            </SafeAreaView>
+
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 
-                {/* 1. ẢNH SCAN VÀ KẾT QUẢ CHÍNH */}
+                {/* 🟢 HERO SECTION: TỐI GIẢN TẬP TRUNG VÀO ẢNH PHÁC THẢO */}
                 <View style={styles.heroSection}>
-                    <Image source={{ uri: resultData.analyzedImageUrl || imageUri }} style={styles.resultImage} contentFit="cover" />
-                    <View style={styles.heroOverlay}>
-                        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-                            <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
-                        </TouchableOpacity>
-                        
-                        <View style={styles.resultBadge}>
-                            <MaterialCommunityIcons name={getIcon(resultData.shapeResult)} size={24} color="#1C2541" />
-                            <Text style={styles.resultBadgeText}>{resultData.shapeResult}</Text>
-                        </View>
-                    </View>
+                    <Image 
+                        source={{ uri: resultData.analyzedImageUrl }} 
+                        style={styles.sketchImage} 
+                        contentFit="contain" 
+                        transition={300} 
+                    />
                 </View>
 
+                {/* 🟢 PHẦN ĐỊNH DANH (TITLE TO RÕ RÀNG) */}
+                <View style={styles.titleSection}>
+                    <Text style={[styles.subTitleText, { color: theme.gray }]}>BẠN SỞ HỮU</Text>
+                    <Text style={[styles.mainTitleText, { color: theme.text }]}>{displayName}</Text>
+                    <Text style={[styles.descText, { color: theme.text }]}>
+                        {resultData.advice?.description}
+                    </Text>
+                </View>
+
+                {/* 🟢 NỘI DUNG CẨM NANG (CHIA KHỐI THÔNG MINH, DỄ ĐỌC) */}
                 <View style={styles.contentSection}>
-                    
-                    {/* NÚT CHỌN LẠI DÁNG (MANUAL OVERRIDE) */}
-                    <TouchableOpacity style={styles.overrideBtn} onPress={() => setManualModalVisible(true)}>
-                        <Text style={[styles.overrideText, { color: theme.primary }]}>
-                            {language === 'vi' ? "Chưa chính xác? Chọn lại dáng người" : "Not accurate? Reselect body shape"}
-                        </Text>
-                        <Ionicons name="chevron-down" size={16} color={theme.primary} />
-                    </TouchableOpacity>
 
-                    <Text style={[styles.descText, { color: theme.text }]}>{resultData.advice?.description}</Text>
-
-                    {/* ========================================================= */}
-                    {/* KHỐI GIAO DIỆN KIỂU MỚI (Khớp 100% với ảnh ông gửi)       */}
-                    {/* ========================================================= */}
-                    
-                    {/* THẺ ƯU ĐIỂM */}
+                    {/* KHỐI ƯU ĐIỂM (DẠNG QUOTE ẤN TƯỢNG) */}
                     {parsedAdvice.advantages.length > 0 && (
-                        <View style={[styles.uiCard, { backgroundColor: cardBgColor }]}>
-                            <View style={styles.cardHeader}>
-                                <Ionicons name="star-outline" size={22} color={accentColor} />
-                                <Text style={[styles.cardTitle, { color: accentColor }]}>
-                                    {language === 'vi' ? "ƯU ĐIỂM CƠ THỂ" : "BODY ADVANTAGES"}
-                                </Text>
-                            </View>
+                        <View style={[styles.advantageBox, { backgroundColor: isDarkMode ? '#1C2541' : '#FDF5F7', borderLeftColor: highlightColor }]}>
+                            <Ionicons name="sparkles" size={20} color={highlightColor} style={{ marginBottom: 8 }} />
                             {parsedAdvice.advantages.map((adv, idx) => (
-                                <View key={idx} style={styles.listItem}>
-                                    <Ionicons name="checkmark-circle-outline" size={20} color={accentColor} />
-                                    <Text style={[styles.listText, { color: theme.text }]}>{adv}</Text>
-                                </View>
+                                <Text key={idx} style={[styles.advantageText, { color: theme.text }]}>• {adv}</Text>
                             ))}
                         </View>
                     )}
 
-                    {/* THẺ NÊN MẶC (Lưới 2x2) */}
+                    {/* KHỐI NÊN MẶC (DẠNG CARD LIST THANH LỊCH) */}
                     {parsedAdvice.toWear.length > 0 && (
-                        <View style={[styles.uiCard, { backgroundColor: cardBgColor }]}>
-                            <View style={styles.cardHeader}>
-                                <MaterialCommunityIcons name="hanger" size={22} color={accentColor} />
-                                <Text style={[styles.cardTitle, { color: accentColor }]}>
-                                    {language === 'vi' ? "TRANG PHỤC NÊN MẶC" : "WHAT TO WEAR"}
-                                </Text>
-                            </View>
-                            <View style={styles.gridContainer}>
+                        <View style={styles.sectionBlock}>
+                            <Text style={[styles.sectionHeading, { color: theme.text }]}>Bí quyết tôn dáng</Text>
+                            <View style={styles.cardList}>
                                 {parsedAdvice.toWear.map((item, idx) => (
-                                    <View key={idx} style={[styles.gridItem, { backgroundColor: cardItemColor }]}>
-                                        <Text style={[styles.gridTitle, { color: accentColor }]}>{item.title}</Text>
-                                        <Text style={[styles.gridDesc, { color: theme.text }]}>{item.desc}</Text>
+                                    <View key={idx} style={[styles.doCard, { backgroundColor: theme.card }]}>
+                                        <View style={[styles.doIconBg, { backgroundColor: 'rgba(39, 174, 96, 0.1)' }]}>
+                                            <Ionicons name="checkmark" size={18} color="#27AE60" />
+                                        </View>
+                                        <View style={styles.doTextWrap}>
+                                            <Text style={[styles.doTitle, { color: theme.text }]}>{item.title}</Text>
+                                            <Text style={[styles.doDesc, { color: theme.gray }]}>{item.desc}</Text>
+                                        </View>
                                     </View>
                                 ))}
                             </View>
                         </View>
                     )}
 
-                    {/* THẺ NÊN TRÁNH */}
+                    {/* KHỐI NÊN TRÁNH (DẠNG CẢNH BÁO NHẸ NHÀNG) */}
                     {parsedAdvice.toAvoid.length > 0 && (
-                        <View style={[styles.uiCard, { backgroundColor: cardBgColor }]}>
-                            <View style={styles.cardHeader}>
-                                <Ionicons name="ban-outline" size={22} color={accentColor} />
-                                <Text style={[styles.cardTitle, { color: accentColor }]}>
-                                    {language === 'vi' ? "TRANG PHỤC NÊN TRÁNH" : "WHAT TO AVOID"}
-                                </Text>
-                            </View>
+                        <View style={styles.sectionBlock}>
+                            <Text style={[styles.sectionHeading, { color: theme.text }]}>Cần lưu ý tránh</Text>
                             {parsedAdvice.toAvoid.map((avoid, idx) => (
-                                <View key={idx} style={styles.listItem}>
-                                    <Ionicons name="close-circle-outline" size={20} color={accentColor} />
-                                    <Text style={[styles.listText, { color: theme.text }]}>{avoid}</Text>
+                                <View key={idx} style={[styles.dontRow, { borderColor: theme.border }]}>
+                                    <Ionicons name="close-circle" size={20} color="#E43F5A" />
+                                    <Text style={[styles.dontText, { color: theme.text }]}>{avoid}</Text>
                                 </View>
                             ))}
                         </View>
                     )}
 
-                    {/* NÚT LƯU KẾT QUẢ */}
-                    <TouchableOpacity 
-                        style={[styles.saveBtn, { backgroundColor: theme.primary, marginTop: 20 }]}
-                        onPress={() => {
-                            Alert.alert("Hoàn tất", "Dáng người của bạn đã được cập nhật!");
-                            navigation.navigate('MainTabs', { screen: 'Profile' });
-                        }}
-                    >
-                        <Text style={styles.saveBtnText}>{language === 'vi' ? "Lưu vào Hồ sơ" : "Save to Profile"}</Text>
-                    </TouchableOpacity>
-
                 </View>
             </ScrollView>
 
-            {/* BOTTOM SHEET CHỌN LẠI DÁNG NGƯỜI */}
-            <Modal visible={isManualModalVisible} transparent={true} animationType="slide">
-                <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContent, { backgroundColor: theme.background }]}>
+            {/* BUTTON NỔI DƯỚI CÙNG (GỌN GÀNG, CAO CẤP) */}
+            <View style={[styles.bottomFloating, { backgroundColor: theme.background }]}>
+                <TouchableOpacity 
+                    style={[styles.saveBtn, { backgroundColor: theme.primary }]} 
+                    onPress={() => navigation.navigate('MainApp', { screen: 'Profile' })}
+                >
+                    <Text style={[styles.saveBtnText, { color: '#FFF' }]}>Áp dụng vào Tủ đồ</Text>
+                    <Ionicons name="arrow-forward" size={18} color="#FFF" style={{ marginLeft: 8 }} />
+                </TouchableOpacity>
+            </View>
+
+            {/* MODAL CHỌN LẠI DÁNG NGƯỜI (ĐÃ FIX LỖI TEXT) */}
+            <Modal visible={isManualModalVisible} transparent={true} animationType="fade">
+                <View style={styles.modalBgCenter}>
+                    <View style={[styles.modalBox, { backgroundColor: theme.background }]}>
                         <View style={styles.modalHeader}>
-                            <Text style={[styles.modalTitle, { color: theme.text }]}>
-                                {language === 'vi' ? "Chọn dáng người của bạn" : "Select your body shape"}
-                            </Text>
-                            <TouchableOpacity onPress={() => setManualModalVisible(false)}>
-                                <Ionicons name="close" size={28} color={theme.gray} />
+                            <View>
+                                <Text style={[styles.modalTitle, { color: theme.text }]}>Tùy chỉnh kết quả</Text>
+                                <Text style={[styles.modalSub, { color: theme.gray }]}>Chọn dáng người phù hợp nhất với bạn</Text>
+                            </View>
+                            <TouchableOpacity onPress={() => setManualModalVisible(false)} style={styles.closeIconBtn}>
+                                <Ionicons name="close" size={24} color={theme.gray} />
                             </TouchableOpacity>
                         </View>
-                        <ScrollView showsVerticalScrollIndicator={false}>
-                            {MANUAL_SHAPES.map((shape, index) => (
-                                <TouchableOpacity 
-                                    key={index} 
-                                    style={[styles.shapeOption, { borderColor: theme.border }]}
-                                    onPress={() => handleManualSelect(shape.name)}
-                                >
-                                    <MaterialCommunityIcons name={shape.icon} size={28} color={theme.primary} />
-                                    <Text style={[styles.shapeOptionText, { color: theme.text }]}>{shape.name}</Text>
-                                    <Ionicons name="chevron-forward" size={20} color={theme.gray} style={{ marginLeft: 'auto' }} />
-                                </TouchableOpacity>
-                            ))}
+                        
+                        <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
+                            {MANUAL_SHAPES.map((shape, index) => {
+                                // 🟢 XỬ LÝ TEXT TRÀN: Tách tên tiếng Việt và tiếng Anh ra 2 dòng
+                                const splitName = shape.name.split(' (');
+                                const nameVN = splitName[0];
+                                const nameEN = splitName[1] ? splitName[1].replace(')', '') : '';
+
+                                return (
+                                    <TouchableOpacity 
+                                        key={index} 
+                                        style={[styles.shapeOption, { backgroundColor: theme.card, borderColor: theme.border }]} 
+                                        onPress={() => handleManualSelect(shape.name)}
+                                    >
+                                        <View style={[styles.shapeIconWrap, { backgroundColor: theme.background }]}>
+                                            <MaterialCommunityIcons name={shape.icon} size={24} color={theme.primary} />
+                                        </View>
+                                        <View style={styles.shapeTextWrap}>
+                                            <Text style={[styles.shapeOptionTitle, { color: theme.text }]}>{nameVN}</Text>
+                                            <Text style={[styles.shapeOptionSub, { color: theme.gray }]}>{nameEN}</Text>
+                                        </View>
+                                        <Ionicons name="chevron-forward" size={18} color={theme.gray} />
+                                    </TouchableOpacity>
+                                );
+                            })}
                         </ScrollView>
                     </View>
                 </View>
             </Modal>
-
-        </ScreenWrapper>
+        </View>
     );
 };
 
 const styles = StyleSheet.create({
-    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    scanningImage: { ...StyleSheet.absoluteFillObject },
-    overlay: { alignItems: 'center', backgroundColor: 'rgba(28, 37, 65, 0.85)', padding: 30, borderRadius: SIZES.radius * 2, width: '80%' },
-    scanningText: { fontFamily: FONTS.bold, fontSize: 16, color: '#FFF', marginTop: 20, marginBottom: 5, textAlign: 'center' },
-    scanningSubText: { fontFamily: FONTS.regular, fontSize: 13, color: '#8A94A6' },
-    errorText: { fontFamily: FONTS.medium, fontSize: 16, marginTop: 15, marginBottom: 25 },
-    btnRetry: { paddingVertical: 12, paddingHorizontal: 30, borderRadius: 25 },
-    btnRetryText: { fontFamily: FONTS.bold, color: '#FFF', fontSize: 16 },
+    container: { flex: 1 },
     
-    heroSection: { height: width * 1.1, width: '100%', position: 'relative' },
-    resultImage: { width: '100%', height: '100%' },
-    heroOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'space-between', padding: 20, paddingTop: 50, backgroundColor: 'rgba(0,0,0,0.15)' },
-    backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(28, 37, 65, 0.6)', justifyContent: 'center', alignItems: 'center' },
-    resultBadge: { alignSelf: 'center', backgroundColor: '#E5B05C', paddingVertical: 10, paddingHorizontal: 25, borderRadius: 30, flexDirection: 'row', alignItems: 'center', elevation: 5, marginBottom: -20 },
-    resultBadgeText: { fontFamily: FONTS.bold, fontSize: 18, color: '#1C2541', marginLeft: 8 },
+    // Header Nổi
+    headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, zIndex: 10 },
+    backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
+    tuneBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
     
-    contentSection: { padding: SIZES.padding, paddingTop: 30, backgroundColor: '#FFF', borderTopLeftRadius: 30, borderTopRightRadius: 30, marginTop: -30 },
+    // Loading & Error
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+    radarBox: { width: 90, height: 90, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
+    scanningText: { fontFamily: FONTS.bold, fontSize: 16, letterSpacing: 0.5 },
+    errorText: { fontFamily: FONTS.bold, fontSize: 20, marginBottom: 8 },
+    errorSubText: { fontFamily: FONTS.regular, fontSize: 14, textAlign: 'center', marginBottom: 32, lineHeight: 22, paddingHorizontal: 20 },
+    btnRetry: { paddingVertical: 14, paddingHorizontal: 30, borderRadius: 20 },
+    btnRetryText: { fontFamily: FONTS.bold, fontSize: 15 },
     
-    overrideBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 10, marginBottom: 10 },
-    overrideText: { fontFamily: FONTS.medium, fontSize: 14, marginRight: 5, textDecorationLine: 'underline' },
-    descText: { fontFamily: FONTS.regular, fontSize: 15, lineHeight: 24, textAlign: 'center', marginBottom: 25, paddingHorizontal: 10 },
+    // Image Section
+    heroSection: { height: height * 0.4, width: '100%', alignItems: 'center', justifyContent: 'flex-end', paddingTop: 80, paddingBottom: 20 },
+    sketchImage: { width: '80%', height: '100%', opacity: 0.9 },
+    
+    // Title Section
+    titleSection: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 20, alignItems: 'center' },
+    subTitleText: { fontFamily: FONTS.bold, fontSize: 12, letterSpacing: 2, marginBottom: 6 },
+    mainTitleText: { fontFamily: FONTS.bold, fontSize: 32, marginBottom: 16, textAlign: 'center', letterSpacing: -0.5 },
+    descText: { fontFamily: FONTS.regular, fontSize: 15, lineHeight: 26, textAlign: 'center', opacity: 0.8 },
+    
+    // Content Layout
+    contentSection: { paddingHorizontal: 24 },
+    
+    // Ưu điểm
+    advantageBox: { padding: 20, borderRadius: 20, borderLeftWidth: 4, marginBottom: 32 },
+    advantageText: { fontFamily: FONTS.medium, fontSize: 15, lineHeight: 24, marginBottom: 6 },
+    
+    // Gợi ý & Cần tránh
+    sectionBlock: { marginBottom: 35 },
+    sectionHeading: { fontFamily: FONTS.bold, fontSize: 20, marginBottom: 16, letterSpacing: -0.3 },
+    
+    cardList: { gap: 12 },
+    doCard: { flexDirection: 'row', padding: 16, borderRadius: 20, alignItems: 'center' },
+    doIconBg: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
+    doTextWrap: { flex: 1 },
+    doTitle: { fontFamily: FONTS.bold, fontSize: 15, marginBottom: 4 },
+    doDesc: { fontFamily: FONTS.regular, fontSize: 13, lineHeight: 20 },
 
-    // STYLE MỚI CHO GIAO DIỆN THẺ (UI CARDS)
-    uiCard: { borderRadius: SIZES.radius, padding: 20, marginBottom: 20 },
-    cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-    cardTitle: { fontFamily: FONTS.bold, fontSize: 16, marginLeft: 8, textTransform: 'uppercase' },
-    
-    listItem: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 12, paddingRight: 15 },
-    listText: { fontFamily: FONTS.regular, fontSize: 14, lineHeight: 22, marginLeft: 10, flex: 1 },
-    
-    gridContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
-    gridItem: { width: '48%', borderRadius: SIZES.radius - 5, padding: 15, marginBottom: 15, elevation: 1 },
-    gridTitle: { fontFamily: FONTS.bold, fontSize: 14, marginBottom: 5 },
-    gridDesc: { fontFamily: FONTS.regular, fontSize: 12, lineHeight: 18 },
+    dontRow: { flexDirection: 'row', paddingVertical: 14, borderBottomWidth: 1, alignItems: 'center' },
+    dontText: { fontFamily: FONTS.medium, fontSize: 14, lineHeight: 22, flex: 1, marginLeft: 12 },
 
-    saveBtn: { paddingVertical: 16, borderRadius: SIZES.radius, alignItems: 'center', elevation: 3 },
-    saveBtnText: { fontFamily: FONTS.bold, color: '#FFFFFF', fontSize: 16 },
+    // FAB Button
+    bottomFloating: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingVertical: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
+    saveBtn: { flexDirection: 'row', paddingVertical: 16, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+    saveBtnText: { fontFamily: FONTS.bold, fontSize: 16, letterSpacing: 0.5 },
 
-    // STYLE CHO MODAL CHỌN DÁNG
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-    modalContent: { borderTopLeftRadius: 25, borderTopRightRadius: 25, padding: 20, maxHeight: height * 0.7 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
-    modalTitle: { fontFamily: FONTS.bold, fontSize: 18 },
-    shapeOption: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, borderBottomWidth: 1 },
-    shapeOptionText: { fontFamily: FONTS.medium, fontSize: 16, marginLeft: 15 },
+    // Modal
+    modalBgCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+    modalBox: { width: '90%', borderRadius: 32, padding: 24, maxHeight: height * 0.75 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
+    modalTitle: { fontFamily: FONTS.bold, fontSize: 20, marginBottom: 4 },
+    modalSub: { fontFamily: FONTS.regular, fontSize: 13 },
+    closeIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(150,150,150,0.1)', justifyContent: 'center', alignItems: 'center' },
+    
+    // Chỗ sửa lõi Flexbox chống tràn chữ đây
+    shapeOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 20, marginBottom: 12, borderWidth: 1 },
+    shapeIconWrap: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    shapeTextWrap: { flex: 1, paddingHorizontal: 14 },
+    shapeOptionTitle: { fontFamily: FONTS.bold, fontSize: 15, marginBottom: 2 },
+    shapeOptionSub: { fontFamily: FONTS.regular, fontSize: 12, opacity: 0.7 },
 });
 
 export default BodyShapeScreen;

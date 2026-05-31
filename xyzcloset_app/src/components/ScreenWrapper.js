@@ -4,13 +4,11 @@ import {
     StatusBar, 
     Platform, 
     KeyboardAvoidingView, 
-    TouchableWithoutFeedback, 
-    Keyboard,
     View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SIZES } from '../theme/theme'; 
-import { SettingsContext } from '../context/SettingsContext'; // Import Context
+import { SettingsContext } from '../context/SettingsContext'; 
 import { lightColors } from '../theme/theme';
 
 const ScreenWrapper = ({ children, style, withPadding = false }) => {
@@ -23,7 +21,11 @@ const ScreenWrapper = ({ children, style, withPadding = false }) => {
     return (
         <View style={[
             styles.container, 
-            { paddingTop: insets.top, backgroundColor: theme.background }, // Dùng theme.background
+            { 
+                paddingTop: insets.top, 
+                backgroundColor: theme.background,
+                // Không đẩy paddingBottom ở đây vì MainTabNavigator đã tự xử lý insets.bottom
+            }, 
             withPadding && { paddingHorizontal: SIZES.padding }, 
             style
         ]}>
@@ -34,9 +36,8 @@ const ScreenWrapper = ({ children, style, withPadding = false }) => {
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'android' ? 80 : 0} 
             >
-                <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-                    <View style={{ flex: 1 }}>{children}</View>
-                </TouchableWithoutFeedback>
+                {/* Đã loại bỏ TouchableWithoutFeedback gây đơ ScrollView */}
+                <View style={{ flex: 1 }}>{children}</View>
             </KeyboardAvoidingView>
         </View>
     );

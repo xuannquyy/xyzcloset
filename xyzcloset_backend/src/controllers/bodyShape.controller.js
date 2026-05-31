@@ -31,17 +31,25 @@ const analyzeBodyShape = async (req, res) => {
                 const metrics = pythonRes.data.metrics;
 
                 // 3. Lấy lời khuyên phối đồ cho dáng người đó từ Database
+                // SỬA LỖI 1: Dùng toán tử 'contains' để tìm chuỗi tương đối
+                // Vd: tìm "Dáng Quả Lê" trong chuỗi "Dáng Quả Lê (Pear)"
                 const guide = await prisma.bodyShapeGuide.findFirst({
-                    where: { shapeName: aiResult }
+                    where: { 
+                        shapeName: {
+                            contains: aiResult
+                        }
+                    }
                 });
 
                 // 4. Trả toàn bộ cục dữ liệu hoàn hảo về cho App Điện thoại
                 return res.status(200).json({
                     success: true,
                     message: "AI đã phân tích xong!",
-                    analyzedImageUrl: imageUrl,
+                    // SỬA LỖI 2: Ưu tiên trả về ảnh phác thảo để màn hình hiện đẹp như luồng thủ công. 
+                    // Nếu lỗi db không có ảnh phác thảo thì mới fallback dùng ảnh người dùng upload.
+                    analyzedImageUrl: guide?.illustrationUrl || imageUrl, 
                     shapeResult: aiResult,
-                    metrics: metrics, // Trả luôn thông số Vai/Hông về
+                    metrics: metrics, 
                     advice: guide 
                 });
             }

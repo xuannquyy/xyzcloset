@@ -96,7 +96,7 @@ const AddItemScreen = ({ route, navigation }) => {
                     }
                 }
             } catch (error) {
-                console.log("Lỗi tải form:", error);
+                console.log("Lỗi tải form ban đầu:", error);
             }
         };
         fetchFormData();
@@ -141,7 +141,6 @@ const AddItemScreen = ({ route, navigation }) => {
                 showCustomAlert("Thành công", "Chuyên gia AI đã tách nền xong cho món đồ của bạn!", "success");
             }
         } catch (error) {
-            console.log("Lỗi AI 500:", error);
             showCustomAlert("Hệ thống gián đoạn", "AI hiện đang quá tải hoặc gặp lỗi. Vui lòng thử lại sau ít phút.", "error");
         } finally {
             setIsProcessingAI(false);
@@ -181,8 +180,14 @@ const AddItemScreen = ({ route, navigation }) => {
             formData.append('notes', notes || '');
 
             const finalImage = processedImageUri || imageUri;
+            
+            // 🟢 LOGIC SỬA LỖI ẢNH:
             if (finalImage && !finalImage.startsWith('http')) {
+                // Nếu là file dưới máy -> Cần đẩy file vật lý lên
                 formData.append('image', { uri: finalImage, type: 'image/jpeg', name: 'final.jpg' });
+            } else if (finalImage && finalImage.startsWith('http')) {
+                // Nếu là ảnh sửa / clone đã có link -> Gửi link dạng chữ
+                formData.append('existingImageUrl', finalImage);
             }
 
             if (isEditing) {
@@ -193,13 +198,15 @@ const AddItemScreen = ({ route, navigation }) => {
                 navigation.goBack();
             }
         } catch (error) {
-            showCustomAlert("Lỗi lưu trữ", "Không thể lưu món đồ vào lúc này. Vui lòng kiểm tra lại kết nối.", "error");
+            // 🟢 CHUYỂN BÁO LỖI XUỐNG ĐÂY ĐỂ ĐỌC ĐƯỢC CHÍNH XÁC BACKEND CHỬI GÌ
+            console.log("❌ Lỗi chi tiết khi lưu:", error.response?.data || error.message);
+            const errorMessage = error.response?.data?.message || "Không thể lưu món đồ vào lúc này. Vui lòng kiểm tra lại kết nối.";
+            showCustomAlert("Lỗi lưu trữ", errorMessage, "error");
         } finally {
             setIsSaving(false);
         }
     };
 
-    // Xác định màu nền của icon tuỳ thuộc vào loại thông báo (Dùng màu giao thông chuẩn)
     const getAlertIconColor = () => {
         if (customAlert.type === 'success') return '#27AE60';
         if (customAlert.type === 'warning') return '#F39C12';
@@ -375,7 +382,7 @@ const AddItemScreen = ({ route, navigation }) => {
                 </View>
             </ScrollView>
 
-            {/* 🟢 CUSTOM LUXURY ALERT MODAL ĐÃ ĐƯỢC ĐỒNG BỘ THEME */}
+            {/* CUSTOM LUXURY ALERT MODAL ĐÃ ĐƯỢC ĐỒNG BỘ THEME */}
             <Modal visible={customAlert.visible} transparent={true} animationType="fade">
                 <View style={styles.alertOverlay}>
                     <View style={[styles.alertBox, { backgroundColor: theme.card }]}>

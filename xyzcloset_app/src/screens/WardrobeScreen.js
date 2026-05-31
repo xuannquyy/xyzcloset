@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useCallback } from 'react'; // Bổ sung useCallback
 import { 
     StyleSheet, View, Text, TouchableOpacity, FlatList, 
     ActivityIndicator, Dimensions, TextInput 
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native'; // 🟢 Bổ sung useFocusEffect
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import ScreenWrapper from '../components/ScreenWrapper';
@@ -54,9 +55,13 @@ const WardrobeScreen = ({ navigation }) => {
         fetchCategories();
     }, []);
 
-    useEffect(() => {
-        fetchItems();
-    }, [activeTab]);
+    // 🟢 SỬA LỖI KHÔNG CẬP NHẬT: Dùng useFocusEffect thay thế cho useEffect
+    // Mỗi khi màn hình này được "Focus" (quay lại từ AddItem), nó sẽ chạy lại fetchItems
+    useFocusEffect(
+        useCallback(() => {
+            fetchItems();
+        }, [activeTab]) // Vẫn theo dõi sự thay đổi của activeTab
+    );
 
     // 3. LỌC ITEM THEO CẢ DANH MỤC VÀ TỪ KHÓA TÌM KIẾM
     const filteredItems = items.filter(item => {
@@ -69,10 +74,9 @@ const WardrobeScreen = ({ navigation }) => {
         <TouchableOpacity 
             style={[styles.itemCard, { backgroundColor: theme.card, borderColor: theme.border }]}
             onPress={() => {
-                // 🟢 THÊM LỆNH NÀY CHUYỂN TRANG
                 navigation.navigate('ItemDetail', { 
                     item: item, 
-                    isPublic: activeTab === 'public' // Báo cho trang kia biết đây là đồ cá nhân hay đồ Shopee
+                    isPublic: activeTab === 'public' 
                 });
             }}
         >
@@ -123,7 +127,7 @@ const WardrobeScreen = ({ navigation }) => {
                         placeholderTextColor={theme.gray}
                         value={searchQuery}
                         onChangeText={setSearchQuery}
-                        clearButtonMode="while-editing" // Hiện nút X để xóa nhanh trên iOS
+                        clearButtonMode="while-editing" 
                     />
                     {searchQuery.length > 0 && (
                         <TouchableOpacity onPress={() => setSearchQuery('')}>

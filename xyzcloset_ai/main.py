@@ -6,12 +6,12 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from PIL import Image
 import rembg
-import mediapipe as mp # Đã dùng Python 3.11 nên chỉ cần import chuẩn thế này là đủ
+import mediapipe as mp
 import base64
 
 app = FastAPI(
     title="XYZ CLOSET - AI Microservice",
-    description="API xử lý tách nền trang phục (rembg) và phân tích dáng người thực tế (MediaPipe).",
+    description="API xử lý tách nền trang phục, phân tích dáng người thực tế và thử đồ ảo (VTON).",
     version="1.0.0"
 )
 
@@ -21,6 +21,10 @@ pose_model = mp_pose.Pose(static_image_mode=True, min_detection_confidence=0.5)
 # Định nghĩa cấu trúc dữ liệu đầu vào nhận từ Node.js Backend thông qua HTTP Post
 class ImageUrlInput(BaseModel):
     image_url: str
+
+class VtonInput(BaseModel):
+    person_url: str
+    garment_url: str
 
 def download_image(url: str) -> Image.Image:
     """
@@ -99,9 +103,25 @@ async def analyze_body_shape(data: ImageUrlInput):
     LEFT_HIP = mp_pose.PoseLandmark.LEFT_HIP
     RIGHT_HIP = mp_pose.PoseLandmark.RIGHT_HIP
     
+    # --- BẮT ĐẦU ĐOẠN SỬA: KIỂM TRA ĐỘ ĐỨNG THẲNG TRỤC Z ---
+    shoulder_z_diff = abs(landmarks[LEFT_SHOULDER].z - landmarks[RIGHT_SHOULDER].z)
+    if shoulder_z_diff > 0.15:
+        raise HTTPException(
+            status_code=400, 
+            detail="Bạn đang đứng xoay người. Vui lòng đứng thẳng, đối diện trực tiếp với camera để AI đo tỷ lệ chính xác!"
+        )
+    # --- KẾT THÚC ĐOẠN SỬA ---
+
     # Hàm tính khoảng cách Euclid chiều ngang (trục X) giữa hai cột mốc cơ thể
     def get_distance_width(point1, point2):
         return math.sqrt((landmarks[point1].x - landmarks[point2].x) ** 2)
+
+    # Tính chiều cao của khung xương trên ảnh
+    pose_height = abs(landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y - landmarks[mp_pose.PoseLandmark.NOSE].y)
+    
+    # Nếu pose chiếm chưa tới 30% chiều cao ảnh thì báo lỗi (ảnh quá xa)
+    if pose_height < 0.3:
+        raise HTTPException(status_code=400, detail="Ảnh quá xa, vui lòng chụp gần hơn để AI phân tích chính xác!")
 
     # 4. Tính toán kích thước bề ngang tương đối của Vai và Hông từ ảnh chụp
     shoulder_width = get_distance_width(LEFT_SHOULDER, RIGHT_SHOULDER)
@@ -119,19 +139,17 @@ async def analyze_body_shape(data: ImageUrlInput):
     
     shape_result = "Dáng Chữ Nhật"  # Đặt làm mốc cơ bản (Default fallback)
     
-    if ratio > 1.08:
-        # Bờ vai rộng, hông hẹp nheo về phía dưới
+    if ratio > 1.15: 
         shape_result = "Dáng Tam Giác Ngược"
-    elif ratio < 0.94:
-        # Vùng hông nở rộng, đùi đầy đặn hơn bờ vai
+    # Thu hẹp ngưỡng Quả Lê
+    elif ratio < 0.90:
         shape_result = "Dáng Quả Lê"
+    # Dáng Chữ nhật chiếm đa số (cơ bản)
+    elif 0.95 <= ratio <= 1.10:
+        shape_result = "Dáng Chữ Nhật"
     else:
-        # Vai và hông xấp xỉ bằng nhau
-        # Mẹo tối ưu hóa trải nghiệm: Do ảnh 2D khó quét sâu vùng eo, ta phân tách mềm mại mốc Đồng hồ cát
-        if ratio >= 0.97 and ratio <= 1.03:
-            shape_result = "Dáng Đồng Hồ Cát"
-        else:
-            shape_result = "Dáng Chữ Nhật"
+        # Nếu nằm ở khoảng giữa, ưu tiên Đồng hồ cát nếu cần hoặc để mặc định
+        shape_result = "Dáng Đồng Hồ Cát"
 
     # Trả về kết quả phân tích dạng JSON cực kỳ tường minh
     return {

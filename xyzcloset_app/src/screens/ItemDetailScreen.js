@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { 
     StyleSheet, View, Text, ScrollView, TouchableOpacity, 
-    Dimensions, Linking, Alert, FlatList, ActivityIndicator 
+    Dimensions, Linking, FlatList, ActivityIndicator, Modal 
 } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
@@ -13,7 +13,6 @@ import axiosClient from '../api/axiosClient';
 
 const { width, height } = Dimensions.get('window');
 
-// BẢNG MÀU ÁNH XẠ (ĐỂ HIỂN THỊ VIÊN BI MÀU)
 const getColorHex = (colorName) => {
     if (!colorName) return 'transparent';
     const swatches = {
@@ -21,7 +20,7 @@ const getColorHex = (colorName) => {
         'Nâu/Be': '#D2B48C', 'Be': '#D2B48C', 'Đỏ Đô': '#791127', 'Nâu': '#8B4513',
         'Xám': '#A0A0A0', 'Pastel': '#FADADD'
     };
-    return swatches[colorName] || '#E5B05C'; // Vàng kim cho các màu tự nhập
+    return swatches[colorName] || '#E5B05C'; 
 };
 
 const ItemDetailScreen = ({ route, navigation }) => {
@@ -32,15 +31,51 @@ const ItemDetailScreen = ({ route, navigation }) => {
     const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(true);
     const [isCloning, setIsCloning] = useState(false);
 
-    // MỞ LINK MUA SẮM
+    // ==========================================
+    // HỆ THỐNG CUSTOM ALERT SANG TRỌNG
+    // ==========================================
+    const [customAlert, setCustomAlert] = useState({ 
+        visible: false, title: '', message: '', type: 'error', onConfirm: null, showCancel: false 
+    });
+
+    const showAlert = (title, message, type = 'error', onConfirm = null, showCancel = false) => {
+        setCustomAlert({ visible: true, title, message, type, onConfirm, showCancel });
+    };
+
+    const handleAlertConfirm = () => {
+        const { onConfirm } = customAlert;
+        setCustomAlert(prev => ({ ...prev, visible: false }));
+        if (onConfirm) {
+            setTimeout(() => { onConfirm(); }, 300); 
+        }
+    };
+
+    const handleAlertCancel = () => {
+        setCustomAlert(prev => ({ ...prev, visible: false }));
+    };
+
+    const getAlertIconColor = () => {
+        if (customAlert.type === 'success') return theme.primary; 
+        if (customAlert.type === 'confirm' || customAlert.type === 'warning') return theme.accent;
+        return '#E43F5A'; 
+    };
+
+    const getAlertIconName = () => {
+        if (customAlert.type === 'success') return 'checkmark-circle';
+        if (customAlert.type === 'confirm' || customAlert.type === 'warning') return 'help-circle';
+        return 'close-circle';
+    };
+
+    // ==========================================
+    // CÁC HÀM XỬ LÝ CHÍNH
+    // ==========================================
     const handleOpenShopee = async () => {
         const url = item.affiliateUrl || "https://shopee.vn/"; 
         const supported = await Linking.canOpenURL(url);
         if (supported) await Linking.openURL(url);
-        else Alert.alert("Lỗi", "Không thể mở trang mua sắm lúc này.");
+        else showAlert("Lỗi kết nối", "Không thể mở trang mua sắm lúc này.", "error");
     };
 
-    // SAO CHÉP VÀO TỦ CÁ NHÂN
     const handleCloneToWardrobe = async () => {
         setIsCloning(true);
         try {
@@ -54,50 +89,44 @@ const ItemDetailScreen = ({ route, navigation }) => {
             if (item.material) formData.append('material', item.material);
             if (item.careInstructions) formData.append('careInstructions', item.careInstructions);
             if (item.notes) formData.append('notes', item.notes);
-
             if (item.tags && item.tags.length > 0) {
                 const tagIds = item.tags.map(t => t.id);
                 formData.append('tagIds', JSON.stringify(tagIds));
             }
 
             await axiosClient.post('/wardrobe', formData, { headers: { 'Content-Type': 'multipart/form-data' }});
-            Alert.alert("Tuyệt vời", "Món đồ này đã được cất gọn vào Tủ đồ cá nhân của bạn!");
-            navigation.goBack();
+            showAlert("Tuyệt vời", "Món đồ này đã được cất gọn vào Tủ đồ cá nhân của bạn!", "success", () => navigation.goBack());
         } catch (error) {
-            Alert.alert("Lỗi", "Không thể thêm vào tủ lúc này.");
+            showAlert("Thất bại", "Không thể thêm vào tủ lúc này. Vui lòng kiểm tra kết nối.", "error");
         } finally {
             setIsCloning(false);
         }
     };
 
-    // XÓA ĐỒ CÁ NHÂN
     const handleDeletePersonalItem = () => {
-        Alert.alert(
-            "Xóa món đồ", "Bạn có chắc chắn muốn vứt món đồ này khỏi tủ không?",
-            [
-                { text: "Hủy", style: "cancel" },
-                { 
-                    text: "Xóa", style: "destructive",
-                    onPress: async () => {
-                        try {
-                            await axiosClient.delete(`/wardrobe/${item.id}`);
-                            Alert.alert("Thành công", "Đã xóa món đồ khỏi tủ.");
-                            navigation.goBack();
-                        } catch (error) {
-                            Alert.alert("Lỗi", "Không thể xóa món đồ lúc này.");
-                        }
-                    }
+        showAlert(
+            "Xóa món đồ", 
+            "Bạn có chắc chắn muốn vứt món đồ này khỏi tủ không?", 
+            "confirm", 
+            async () => {
+                try {
+                    await axiosClient.delete(`/wardrobe/${item.id}`);
+                    showAlert("Thành công", "Đã xóa món đồ khỏi tủ.", "success", () => navigation.goBack());
+                } catch (error) {
+                    showAlert("Lỗi", "Không thể xóa món đồ lúc này.", "error");
                 }
-            ]
+            }, 
+            true
         );
     };
 
-    // SỬA ĐỒ CÁ NHÂN
     const handleUpdateItem = () => {
         navigation.navigate('AddItem', { itemToEdit: item });
     };
 
-    // 🧠 AI STYLIST THUẬT TOÁN PHỐI ĐỒ
+    // ==========================================
+    // 🧠 THUẬT TOÁN AI STYLIST 3.0 (PHÂN BIỆT ĐẦM VÀ CHÂN VÁY)
+    // ==========================================
     useEffect(() => {
         const fetchSuggestions = async () => {
             try {
@@ -110,52 +139,113 @@ const ItemDetailScreen = ({ route, navigation }) => {
                 if (isPublic) {
                     finalGroups["Sản phẩm tương tự"] = allOtherItems.filter(i => i.categoryId === item.categoryId).slice(0, 6);
                 } else {
-                    const currentCatName = item.category?.name || "";
-                    const myTags = item.tags?.map(t => t.name) || []; 
+                    const currentCatName = (item.category?.name || "").toLowerCase();
+                    const myTags = item.tags?.map(t => t.name.toLowerCase()) || []; 
 
-                    const calculateMatchScore = (targetItem) => {
-                        let score = 0;
-                        const targetTags = targetItem.tags?.map(t => t.name) || [];
-                        myTags.forEach(tag => {
-                            if (targetTags.includes(tag)) score += 2; 
-                        });
-                        return score;
-                    };
-
-                    const getBestMatches = (categoryKeywords) => {
-                        let matches = allOtherItems.filter(i => 
-                            categoryKeywords.some(keyword => (i.category?.name || "").includes(keyword))
+                    const getBestPiece = (targetCategories, themeTags, excludeIds) => {
+                        let candidates = allOtherItems.filter(i => 
+                            targetCategories.some(cat => (i.category?.name || "").toLowerCase().includes(cat.toLowerCase())) &&
+                            !excludeIds.includes(i.id) 
                         );
-                        matches.sort((a, b) => calculateMatchScore(b) - calculateMatchScore(a));
-                        return matches.slice(0, 6); 
+                        
+                        if (candidates.length === 0) return null;
+
+                        candidates.forEach(c => {
+                            c.matchScore = 0;
+                            const cTags = c.tags?.map(t => t.name.toLowerCase()) || [];
+                            
+                            themeTags.forEach(tag => {
+                                if (cTags.includes(tag.toLowerCase())) c.matchScore += 5;
+                            });
+
+                            if (c.color && item.color && c.color === item.color) c.matchScore += 2; 
+                            if (['Trắng', 'Đen', 'Be', 'Xám', 'Navy'].includes(c.color)) c.matchScore += 1;
+                        });
+
+                        candidates.sort((a, b) => b.matchScore - a.matchScore);
+                        return candidates[0]; 
                     };
 
-                    // PHÂN NHÁNH LOGIC GỢI Ý
-                    if (currentCatName.includes("Áo") && !currentCatName.includes("khoác")) {
-                        finalGroups["Phù hợp mặc cùng (Quần/Váy)"] = getBestMatches(["Quần", "Váy"]);
-                        finalGroups["Giày & Phụ kiện đi kèm"] = getBestMatches(["Giày", "Phụ kiện", "Túi"]);
-                    } 
-                    else if (currentCatName.includes("Quần") || currentCatName.includes("Váy")) {
-                        finalGroups["Áo kết hợp hoàn hảo"] = getBestMatches(["Áo"]);
-                        finalGroups["Giày & Phụ kiện đi kèm"] = getBestMatches(["Giày", "Phụ kiện", "Túi"]);
-                    } 
-                    else if (currentCatName.includes("Đầm")) {
-                        finalGroups["Khoác ngoài thanh lịch"] = getBestMatches(["khoác"]);
-                        finalGroups["Giày & Phụ kiện đi kèm"] = getBestMatches(["Giày", "Phụ kiện", "Túi"]);
-                    } 
-                    else if (currentCatName.includes("Giày") || currentCatName.includes("Túi")) {
-                        finalGroups["Trang phục ton-sur-ton"] = getBestMatches(["Áo", "Quần", "Váy", "Đầm"]);
-                    } 
-                    else {
-                        finalGroups["Gợi ý mix & match chung"] = getBestMatches(["Áo", "Quần", "Váy", "Đầm", "Giày"]);
-                    }
+                    const themes = [
+                        { 
+                            title: "Set 1: Năng động ngày Hè", 
+                            tags: ["mùa hè", "đi chơi", "năng động", "thoải mái", "hè"] 
+                        },
+                        { 
+                            title: "Set 2: Thanh lịch Đi học / Thực tập", 
+                            tags: ["đi học", "thực tập", "công sở", "thanh lịch", "lịch sự"] 
+                        },
+                        { 
+                            title: "Set 3: Ton-sur-ton Cá tính", 
+                            tags: myTags.length > 0 ? myTags : ["phong cách", "độc đáo"] 
+                        }
+                    ];
+
+                    let usedItemIds = []; 
+
+                    themes.forEach(theme => {
+                        let outfit = [];
+                        
+                        // 🟢 LOGIC TÁCH BẠCH ĐÃ SỬA LỖI
+                        if (currentCatName.includes("áo") && !currentCatName.includes("khoác")) {
+                            // Chỉ tìm Quần hoặc Chân váy (Tuyệt đối không lấy Váy liền/Đầm)
+                            const bottom = getBestPiece(["quần", "chân váy"], theme.tags, usedItemIds);
+                            if(bottom) { outfit.push(bottom); usedItemIds.push(bottom.id); }
+                            
+                            const shoe = getBestPiece(["giày", "dép"], theme.tags, usedItemIds);
+                            if(shoe) { outfit.push(shoe); usedItemIds.push(shoe.id); }
+                            
+                            const bag = getBestPiece(["túi", "balo", "phụ kiện"], theme.tags, usedItemIds);
+                            if(bag) { outfit.push(bag); usedItemIds.push(bag.id); }
+                            
+                        } 
+                        else if (currentCatName.includes("quần") || currentCatName.includes("chân váy")) {
+                            // Tìm Áo để mặc cùng
+                            const top = getBestPiece(["áo thun", "sơ mi", "áo len"], theme.tags, usedItemIds);
+                            if(top) { outfit.push(top); usedItemIds.push(top.id); }
+                            
+                            const shoe = getBestPiece(["giày", "dép"], theme.tags, usedItemIds);
+                            if(shoe) { outfit.push(shoe); usedItemIds.push(shoe.id); }
+                            
+                            const bag = getBestPiece(["túi", "balo"], theme.tags, usedItemIds);
+                            if(bag) { outfit.push(bag); usedItemIds.push(bag.id); }
+                            
+                        } 
+                        else if (currentCatName.includes("đầm") || currentCatName.includes("váy liền")) {
+                            // Đầm là áo liền quần nên KHÔNG TÌM áo hay quần nữa, chỉ tìm Áo khoác và Phụ kiện
+                            const jacket = getBestPiece(["khoác", "jacket"], theme.tags, usedItemIds);
+                            if(jacket) { outfit.push(jacket); usedItemIds.push(jacket.id); }
+                            
+                            const shoe = getBestPiece(["giày", "cao gót", "dép"], theme.tags, usedItemIds);
+                            if(shoe) { outfit.push(shoe); usedItemIds.push(shoe.id); }
+                            
+                            const bag = getBestPiece(["túi", "balo", "phụ kiện"], theme.tags, usedItemIds);
+                            if(bag) { outfit.push(bag); usedItemIds.push(bag.id); }
+                            
+                        } 
+                        else {
+                            // Giày, Túi, Phụ kiện -> Tìm Quần Áo hoặc Đầm cho nó
+                            // Ưu tiên 1: Thử tìm Đầm
+                            const dress = getBestPiece(["đầm", "váy liền"], theme.tags, usedItemIds);
+                            if(dress) { 
+                                outfit.push(dress); usedItemIds.push(dress.id); 
+                            } else {
+                                // Ưu tiên 2: Tìm bộ Áo + Quần/Chân váy
+                                const top = getBestPiece(["áo"], theme.tags, usedItemIds);
+                                if(top) { outfit.push(top); usedItemIds.push(top.id); }
+                                
+                                const bottom = getBestPiece(["quần", "chân váy"], theme.tags, usedItemIds);
+                                if(bottom) { outfit.push(bottom); usedItemIds.push(bottom.id); }
+                            }
+                        }
+
+                        if (outfit.length > 0) {
+                            finalGroups[theme.title] = outfit;
+                        }
+                    });
                 }
 
-                const cleanGroups = {};
-                Object.keys(finalGroups).forEach(key => {
-                    if (finalGroups[key] && finalGroups[key].length > 0) cleanGroups[key] = finalGroups[key];
-                });
-                setSuggestionGroups(cleanGroups);
+                setSuggestionGroups(finalGroups);
             } catch (error) {
                 console.log("Lỗi tải gợi ý:", error);
             } finally {
@@ -165,26 +255,40 @@ const ItemDetailScreen = ({ route, navigation }) => {
         fetchSuggestions();
     }, [item.id, isPublic]);
 
-    const renderSuggestionCard = ({ item: suggestedItem }) => (
-        <TouchableOpacity 
-            style={[styles.suggestionCard, { borderColor: theme.border, backgroundColor: theme.card }]}
-            onPress={() => navigation.push('ItemDetail', { item: suggestedItem, isPublic })}
-            activeOpacity={0.8}
-        >
-            <Image source={{ uri: suggestedItem.imageUrl }} style={styles.suggestionImage} contentFit="cover" transition={300} />
-            {suggestedItem.tags && suggestedItem.tags.length > 0 && (
+    // ==========================================
+    // COMPONENT THẺ GỢI Ý ĐƯỢC THIẾT KẾ LẠI
+    // ==========================================
+    const renderSuggestionCard = ({ item: suggestedItem }) => {
+        const catName = (suggestedItem.category?.name || "").toLowerCase();
+        let roleText = "Phụ kiện";
+        
+        // Cập nhật nhãn Label chi tiết hơn
+        if (catName.includes("đầm")) roleText = "Váy liền";
+        else if (catName.includes("áo khoác")) roleText = "Khoác ngoài";
+        else if (catName.includes("áo")) roleText = "Áo";
+        else if (catName.includes("chân váy")) roleText = "Chân Váy";
+        else if (catName.includes("quần")) roleText = "Quần";
+        else if (catName.includes("giày") || catName.includes("dép")) roleText = "Giày dép";
+        else if (catName.includes("túi") || catName.includes("balo")) roleText = "Túi xách";
+
+        return (
+            <TouchableOpacity 
+                style={[styles.suggestionCard, { borderColor: theme.border, backgroundColor: theme.card }]}
+                onPress={() => navigation.push('ItemDetail', { item: suggestedItem, isPublic })}
+                activeOpacity={0.8}
+            >
+                <Image source={{ uri: suggestedItem.imageUrl }} style={styles.suggestionImage} contentFit="cover" transition={300} />
                 <LinearGradient colors={[theme.primary, theme.accent]} style={styles.miniTag} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
-                    <Text style={styles.miniTagText}>Đồng điệu</Text>
+                    <Text style={styles.miniTagText}>{roleText}</Text>
                 </LinearGradient>
-            )}
-        </TouchableOpacity>
-    );
+            </TouchableOpacity>
+        );
+    };
 
     return (
         <ScreenWrapper style={{ backgroundColor: theme.background }}>
             <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 
-                {/* 1. ẢNH BÌA */}
                 <View style={styles.imageContainer}>
                     <Image source={{ uri: item.imageUrl }} style={styles.mainImage} contentFit="cover" transition={300} />
                     <LinearGradient colors={['rgba(0,0,0,0.5)', 'transparent']} style={styles.topGradient} />
@@ -193,7 +297,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                     </TouchableOpacity>
                 </View>
 
-                {/* 2. KHỐI THÔNG TIN NỔI */}
                 <View style={[styles.infoContainer, { backgroundColor: theme.background, shadowColor: theme.primary }]}>
                     
                     <View style={styles.titleRow}>
@@ -216,9 +319,7 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         </Text>
                     )}
 
-                    {/* 3. LƯỚI 4 Ô THÔNG SỐ (LUÔN HIỂN THỊ ĐỂ GIỮ BỐ CỤC LUXURY) */}
                     <View style={styles.specGrid}>
-                        {/* Cột 1: Kích cỡ */}
                         <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Ionicons name="resize" size={22} color={item.size ? theme.primary : theme.gray} style={{ marginBottom: 5 }} />
                             <Text style={[styles.specTitle, { color: theme.gray }]}>Kích cỡ</Text>
@@ -227,7 +328,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                             </Text>
                         </View>
                         
-                        {/* Cột 2: Màu sắc */}
                         <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <View style={[styles.colorDot, { backgroundColor: getColorHex(item.color), borderColor: theme.border }]} />
                             <Text style={[styles.specTitle, { color: theme.gray }]}>Màu sắc</Text>
@@ -236,7 +336,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                             </Text>
                         </View>
 
-                        {/* Cột 3: Chất liệu */}
                         <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <MaterialCommunityIcons name="texture" size={22} color={item.material ? theme.primary : theme.gray} style={{ marginBottom: 5 }} />
                             <Text style={[styles.specTitle, { color: theme.gray }]}>Chất liệu</Text>
@@ -245,7 +344,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                             </Text>
                         </View>
 
-                        {/* Cột 4: Bảo quản */}
                         <View style={[styles.specCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <FontAwesome5 name="hand-holding-water" size={18} color={item.careInstructions ? theme.primary : theme.gray} style={{ marginBottom: 8 }} />
                             <Text style={[styles.specTitle, { color: theme.gray }]}>Bảo quản</Text>
@@ -255,7 +353,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         </View>
                     </View>
 
-                    {/* GHI CHÚ */}
                     {(item.notes || item.description) && (
                         <View style={[styles.noteBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
                             <Ionicons name="information-circle" size={22} color={theme.accent} style={{ marginRight: 12 }} />
@@ -263,7 +360,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* THẺ TAGS */}
                     {item.tags && item.tags.length > 0 && (
                         <View style={styles.tagsContainer}>
                             {item.tags.map(tag => (
@@ -274,7 +370,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* 4. THANH NÚT ĐIỀU HƯỚNG ĐỒNG BỘ MÀU */}
                     {isPublic ? (
                         <View style={styles.publicActions}>
                             <TouchableOpacity style={styles.cloneBtn} onPress={handleCloneToWardrobe} disabled={isCloning}>
@@ -308,7 +403,6 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* 5. GỢI Ý PHỐI ĐỒ CHIA KHAY CHUYÊN NGHIỆP */}
                     <View style={{ marginTop: 45 }}>
                         <View style={styles.aiHeader}>
                             <View style={[styles.sparkleIcon, { backgroundColor: 'rgba(199, 92, 113, 0.15)' }]}>
@@ -338,7 +432,7 @@ const ItemDetailScreen = ({ route, navigation }) => {
                         ) : (
                             <View style={[styles.emptySuggestionBox, { backgroundColor: theme.card, borderColor: theme.border }]}>
                                 <Text style={{ fontFamily: FONTS.regular, color: theme.gray, textAlign: 'center' }}>
-                                    Hãy thêm nhiều đồ vào tủ để Stylist AI có thể gợi ý cho bạn nhé!
+                                    Hãy thêm nhiều quần áo, giày dép vào tủ để Stylist AI có thể mix-match cho bạn nhé!
                                 </Text>
                             </View>
                         )}
@@ -346,6 +440,40 @@ const ItemDetailScreen = ({ route, navigation }) => {
 
                 </View>
             </ScrollView>
+
+            <Modal visible={customAlert.visible} transparent={true} animationType="fade">
+                <View style={styles.alertOverlay}>
+                    <View style={[styles.alertBox, { backgroundColor: theme.background }]}>
+                        
+                        <View style={[styles.alertIconWrapper, { backgroundColor: getAlertIconColor(), borderColor: theme.background }]}>
+                            <Ionicons 
+                                name={getAlertIconName()} 
+                                size={40} color="#FFF" 
+                            />
+                        </View>
+                        
+                        <Text style={[styles.alertTitle, { color: theme.text }]}>{customAlert.title}</Text>
+                        <Text style={[styles.alertMessage, { color: theme.text }]}>{customAlert.message}</Text>
+                        
+                        {customAlert.showCancel ? (
+                            <View style={styles.alertBtnRow}>
+                                <TouchableOpacity style={[styles.alertBtnHalf, { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border }]} onPress={handleAlertCancel}>
+                                    <Text style={[styles.alertBtnText, { color: theme.text }]}>Hủy bỏ</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.alertBtnHalf, { backgroundColor: '#E43F5A' }]} onPress={handleAlertConfirm}>
+                                    <Text style={[styles.alertBtnText, { color: '#FFF' }]}>Xác nhận</Text>
+                                </TouchableOpacity>
+                            </View>
+                        ) : (
+                            <TouchableOpacity style={[styles.alertBtn, { backgroundColor: theme.primary }]} onPress={handleAlertConfirm}>
+                                <Text style={[styles.alertBtnText, { color: '#FFF' }]}>Đã hiểu</Text>
+                            </TouchableOpacity>
+                        )}
+                        
+                    </View>
+                </View>
+            </Modal>
+
         </ScreenWrapper>
     );
 };
@@ -364,7 +492,6 @@ const styles = StyleSheet.create({
     priceText: { fontFamily: FONTS.bold, fontSize: 22, paddingBottom: 5 },
     dateText: { fontFamily: FONTS.medium, fontSize: 13, marginBottom: 25 },
 
-    // LƯỚI THÔNG SỐ (LUÔN CÂN ĐỐI)
     specGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 15, marginBottom: 25 },
     specCard: { width: (width - 65) / 2, padding: 18, borderRadius: 25, borderWidth: 1, elevation: 3, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4 },
     specTitle: { fontFamily: FONTS.medium, fontSize: 13, marginBottom: 4 },
@@ -378,7 +505,6 @@ const styles = StyleSheet.create({
     tagChip: { paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, marginRight: 10, marginBottom: 10 },
     tagText: { fontFamily: FONTS.bold, fontSize: 13 },
 
-    // NÚT BẤM (ĐỒNG BỘ THEME LUXURY)
     publicActions: { flexDirection: 'row', gap: 15, marginTop: 15 },
     cloneBtn: { flex: 1, borderRadius: 25, elevation: 6 },
     shopeeBtn: { flex: 1.2, borderRadius: 25, elevation: 6 },
@@ -389,7 +515,6 @@ const styles = StyleSheet.create({
     actionGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 55, borderRadius: 25 },
     btnText: { fontFamily: FONTS.bold, fontSize: 15, color: '#FFF', marginLeft: 8 },
 
-    // KHU VỰC AI STYLIST
     aiHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 5 },
     sparkleIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
     sectionTitle: { fontFamily: FONTS.bold, fontSize: 20, letterSpacing: 0.5 },
@@ -399,8 +524,17 @@ const styles = StyleSheet.create({
     suggestionImage: { width: '100%', height: '100%' },
     miniTag: { position: 'absolute', top: 8, right: 8, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, elevation: 3 },
     miniTagText: { fontFamily: FONTS.bold, fontSize: 10, color: '#FFF' },
-    
-    emptySuggestionBox: { padding: 25, borderRadius: 20, borderWidth: 1, marginTop: 15, alignItems: 'center' }
+    emptySuggestionBox: { padding: 25, borderRadius: 20, borderWidth: 1, marginTop: 15, alignItems: 'center' },
+
+    alertOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+    alertBox: { width: '82%', borderRadius: 30, paddingHorizontal: 30, paddingBottom: 30, paddingTop: 40, alignItems: 'center', elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.4, shadowRadius: 20 },
+    alertIconWrapper: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', position: 'absolute', top: -35, borderWidth: 4, elevation: 15 },
+    alertTitle: { fontFamily: FONTS.bold, fontSize: 20, marginTop: 10, marginBottom: 10, textAlign: 'center' },
+    alertMessage: { fontFamily: FONTS.regular, fontSize: 15, textAlign: 'center', lineHeight: 22, marginBottom: 25, opacity: 0.8 },
+    alertBtn: { width: '100%', paddingVertical: 14, borderRadius: 20, alignItems: 'center', elevation: 4 },
+    alertBtnRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', gap: 12 },
+    alertBtnHalf: { flex: 1, paddingVertical: 14, borderRadius: 20, alignItems: 'center', elevation: 2 },
+    alertBtnText: { fontFamily: FONTS.bold, fontSize: 16, letterSpacing: 0.5 },
 });
 
 export default ItemDetailScreen;
