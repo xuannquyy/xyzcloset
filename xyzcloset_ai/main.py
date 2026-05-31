@@ -74,90 +74,99 @@ async def remove_background(data: ImageUrlInput):
 # =====================================================================
 # 2. API PHÂN TÍCH DÁNG NGƯỜI (Sử dụng Google MediaPipe)
 # =====================================================================
-@app.post("/api/ai/analyze-body-shape", summary="Phân tích dáng người chuẩn AI")
+@app.post("/api/ai/analyze-body-shape", summary="Phân tích dáng người chuẩn AI (Hybrid Silhouette)")
 async def analyze_body_shape(data: ImageUrlInput):
-    """
-    Nhận vào URL ảnh chụp toàn thân đứng thẳng. AI đo đạc tỷ lệ khoảng cách giữa 
-    bờ Vai (Shoulders) và Hông (Hips) để xác định chính xác hình thể học của người dùng.
-    """
-    # 1. Tải ảnh về và chuẩn hóa sang không gian màu RGB chuẩn mã nguồn OpenCV/MediaPipe
-    pil_img = download_image(data.image_url).convert('RGB')
-    image_np = np.array(pil_img)
-    
-    # 2. Đưa mảng pixel ảnh vào mô hình AI MediaPipe Pose trích xuất các điểm neo xương cơ thể
+    # 1. Tải ảnh gốc
+    pil_img_original = download_image(data.image_url)
+
+    # 2. XÓA NỀN ĐỂ LẤY ĐƯỜNG BAO CƠ THỂ (SILHOUETTE)
+    try:
+        pil_img_nobg = rembg.remove(pil_img_original)
+        img_nobg_np = np.array(pil_img_nobg) # Dạng RGBA
+        # Trích xuất kênh Alpha (độ trong suốt) làm mặt nạ quét
+        alpha_channel = img_nobg_np[:, :, 3] 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Lỗi khi tách nền phân tích viền.")
+
+    # 3. DÙNG MEDIAPIPE LÀM "LA BÀN" TÌM TRỤC Y CỦA VAI & HÔNG
+    pil_img_rgb = pil_img_original.convert('RGB')
+    image_np = np.array(pil_img_rgb)
     results = pose_model.process(image_np)
     
-    # Nếu bức ảnh chụp thiếu bộ phận hoặc mờ, không tìm thấy khung xương thì báo lỗi ngay
     if not results.pose_landmarks:
         raise HTTPException(
             status_code=400, 
-            detail="AI không nhận diện được vóc dáng cơ thể. Hãy đảm bảo ảnh chụp đứng thẳng, rõ từ đầu đến chân và không có vật cản!"
+            detail="AI không nhận diện được khung xương để làm hệ quy chiếu."
         )
     
-    # 3. Lấy danh sách tọa độ các điểm then chốt (Giá trị x, y chạy tương đối từ 0.0 -> 1.0)
     landmarks = results.pose_landmarks.landmark
+    h, w = alpha_channel.shape
     
-    # Trích xuất mã định danh các điểm mốc Vai và Hông theo giải phẫu học cơ thể của Google
     LEFT_SHOULDER = mp_pose.PoseLandmark.LEFT_SHOULDER
     RIGHT_SHOULDER = mp_pose.PoseLandmark.RIGHT_SHOULDER
     LEFT_HIP = mp_pose.PoseLandmark.LEFT_HIP
     RIGHT_HIP = mp_pose.PoseLandmark.RIGHT_HIP
     
-    # --- BẮT ĐẦU ĐOẠN SỬA: KIỂM TRA ĐỘ ĐỨNG THẲNG TRỤC Z ---
-    shoulder_z_diff = abs(landmarks[LEFT_SHOULDER].z - landmarks[RIGHT_SHOULDER].z)
-    if shoulder_z_diff > 0.15:
-        raise HTTPException(
-            status_code=400, 
-            detail="Bạn đang đứng xoay người. Vui lòng đứng thẳng, đối diện trực tiếp với camera để AI đo tỷ lệ chính xác!"
-        )
-    # --- KẾT THÚC ĐOẠN SỬA ---
-
-    # Hàm tính khoảng cách Euclid chiều ngang (trục X) giữa hai cột mốc cơ thể
-    def get_distance_width(point1, point2):
-        return math.sqrt((landmarks[point1].x - landmarks[point2].x) ** 2)
-
-    # Tính chiều cao của khung xương trên ảnh
-    pose_height = abs(landmarks[mp_pose.PoseLandmark.LEFT_ANKLE].y - landmarks[mp_pose.PoseLandmark.NOSE].y)
+    # Tính tọa độ Y (chiều dọc) của Vai và Hông
+    shoulder_y_rel = (landmarks[LEFT_SHOULDER].y + landmarks[RIGHT_SHOULDER].y) / 2
+    hip_y_rel = (landmarks[LEFT_HIP].y + landmarks[RIGHT_HIP].y) / 2
     
-    # Nếu pose chiếm chưa tới 30% chiều cao ảnh thì báo lỗi (ảnh quá xa)
-    if pose_height < 0.3:
-        raise HTTPException(status_code=400, detail="Ảnh quá xa, vui lòng chụp gần hơn để AI phân tích chính xác!")
+    # Suy ra tọa độ Y của Eo (Nằm ở khoảng 45% quãng đường từ Vai xuống Hông)
+    waist_y_rel = shoulder_y_rel + (hip_y_rel - shoulder_y_rel) * 0.45
+    
+    # Đổi tỷ lệ tương đối thành Pixel thực tế trên ảnh
+    shoulder_y_px = int(shoulder_y_rel * h)
+    hip_y_px = int(hip_y_rel * h)
+    waist_y_px = int(waist_y_rel * h)
 
-    # 4. Tính toán kích thước bề ngang tương đối của Vai và Hông từ ảnh chụp
-    shoulder_width = get_distance_width(LEFT_SHOULDER, RIGHT_SHOULDER)
-    hip_width = get_distance_width(LEFT_HIP, RIGHT_HIP)
-    
-    if shoulder_width == 0 or hip_width == 0:
-        raise HTTPException(
-            status_code=400, 
-            detail="Dữ liệu trích xuất chỉ số cơ thể không hợp lệ. Vui lòng thử lại với một bức ảnh khác."
-        )
+    # 4. THƯỚC DÂY PIXEL: Hàm đo chiều ngang của cơ thể
+    def get_silhouette_width(y_center, window_size=15):
+        max_width = 0
+        # Quét một vùng nhỏ (vd: 30 pixel) lên/xuống quanh điểm Y để chống nhiễu do nếp gấp quần áo
+        start_y = max(0, y_center - window_size)
+        end_y = min(h, y_center + window_size)
+        
+        for y in range(start_y, end_y):
+            row = alpha_channel[y, :]
+            # Lấy tất cả tọa độ X có pixel hiển thị (không trong suốt)
+            flesh_pixels = np.where(row > 50)[0]
+            if len(flesh_pixels) > 0:
+                width = flesh_pixels[-1] - flesh_pixels[0]
+                if width > max_width:
+                    max_width = width
+        return max_width
 
-    # 5. THUẬT TOÁN PHÂN TÍCH HÌNH THỂ HỌC (So sánh tỷ lệ toán học chiều ngang)
-    # Tính tỷ số tương quan giữa Chiều rộng Vai / Chiều rộng Hông
-    ratio = shoulder_width / hip_width
-    
-    shape_result = "Dáng Chữ Nhật"  # Đặt làm mốc cơ bản (Default fallback)
-    
-    if ratio > 1.15: 
-        shape_result = "Dáng Tam Giác Ngược"
-    # Thu hẹp ngưỡng Quả Lê
-    elif ratio < 0.90:
-        shape_result = "Dáng Quả Lê"
-    # Dáng Chữ nhật chiếm đa số (cơ bản)
-    elif 0.95 <= ratio <= 1.10:
-        shape_result = "Dáng Chữ Nhật"
-    else:
-        # Nếu nằm ở khoảng giữa, ưu tiên Đồng hồ cát nếu cần hoặc để mặc định
+    # Tiến hành đo đạc 3 vòng bằng pixel
+    shoulder_width = get_silhouette_width(shoulder_y_px)
+    waist_width = get_silhouette_width(waist_y_px)
+    hip_width = get_silhouette_width(hip_y_px)
+
+    if shoulder_width == 0 or hip_width == 0 or waist_width == 0:
+        raise HTTPException(status_code=400, detail="Phông nền phức tạp khiến AI không thể xác định được viền cơ thể ngoài.")
+
+    # 5. THUẬT TOÁN ĐỊNH DÁNG TRÊN KÍCH THƯỚC THỰC (PIXEL)
+    s_h_ratio = shoulder_width / hip_width
+    w_s_ratio = waist_width / shoulder_width
+    w_h_ratio = waist_width / hip_width
+
+    # Thiết lập ngưỡng chênh lệch 5-7% cho độ chính xác cao
+    if 0.93 <= s_h_ratio <= 1.07 and w_s_ratio < 0.85 and w_h_ratio < 0.85:
         shape_result = "Dáng Đồng Hồ Cát"
+    elif s_h_ratio > 1.05:
+        shape_result = "Dáng Tam Giác Ngược"
+    elif s_h_ratio < 0.95:
+        shape_result = "Dáng Quả Lê"
+    elif w_s_ratio >= 0.95 or w_h_ratio >= 0.95:
+        shape_result = "Dáng Quả Táo"
+    else:
+        shape_result = "Dáng Chữ Nhật"
 
-    # Trả về kết quả phân tích dạng JSON cực kỳ tường minh
     return {
         "success": True,
         "metrics": {
-            "shoulder_width_ratio": round(shoulder_width, 4),
-            "hip_width_ratio": round(hip_width, 4),
-            "calculated_ratio": round(ratio, 4)
+            "shoulder_width": int(shoulder_width),
+            "hip_width": int(hip_width),
+            "calculated_ratio": round(s_h_ratio, 3)
         },
         "shapeResult": shape_result
     }

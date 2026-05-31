@@ -156,6 +156,55 @@ const BodyShapeScreen = ({ route, navigation }) => {
                     </Text>
                 </View>
 
+                {/* 🟢 KHỐI CHỈ SỐ AI CÔNG NGHỆ CAO (Chỉ render khi quét ảnh có metrics) */}
+                {resultData?.metrics && (
+                    <View style={styles.metricsWrapper}>
+                        <View style={[styles.metricsContainer, { backgroundColor: theme.card, borderColor: theme.border }]}>
+                            <View style={styles.metricsHeader}>
+                                <MaterialCommunityIcons name="vector-combine" size={16} color={theme.primary} />
+                                <Text style={[styles.metricsTitle, { color: theme.text }]}>THÔNG SỐ KHUNG XƯƠNG (AI POSE SCANNER)</Text>
+                            </View>
+                            
+                            <View style={styles.metricsGrid}>
+                                <View style={styles.metricCard}>
+                                    {/* Sửa text "Tỷ lệ vai" thành "Bề ngang vai" */}
+                                    <Text style={[styles.metricLabel, { color: theme.gray }]}>Bề ngang Vai</Text>
+                                    <Text style={[styles.metricValue, { color: theme.primary }]}>
+                                        {resultData.metrics.shoulder_width} px
+                                    </Text>
+                                </View>
+                                
+                                <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
+                                
+                                <View style={styles.metricCard}>
+                                    {/* Sửa text "Tỷ lệ hông" thành "Bề ngang hông" */}
+                                    <Text style={[styles.metricLabel, { color: theme.gray }]}>Bề ngang Hông</Text>
+                                    <Text style={[styles.metricValue, { color: theme.primary }]}>
+                                        {resultData.metrics.hip_width} px
+                                    </Text>
+                                </View>
+                                
+                                <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
+                                
+                                <View style={styles.metricCard}>
+                                    {/* Sửa text "Hệ số tương quan" thành "Tỷ lệ Vai/Hông" */}
+                                    <Text style={[styles.metricLabel, { color: theme.gray }]}>Tỷ lệ Vai/Hông</Text>
+                                    <Text style={[styles.metricValue, { color: theme.accent || '#E43F5A' }]}>
+                                        {resultData.metrics.calculated_ratio}
+                                    </Text>
+                                </View>
+                            </View>
+                            
+                            <View style={[styles.techFooter, { borderTopColor: theme.border }]}>
+                                <Ionicons name="shield-checkmark-sharp" size={12} color="#27AE60" />
+                                <Text style={[styles.techFooterText, { color: theme.gray }]}>
+                                    Dữ liệu Euclid trích xuất thời gian thực qua mốc MediaPipe Pose 2D
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
                 {/* 🟢 NỘI DUNG CẨM NANG (CHIA KHỐI THÔNG MINH, DỄ ĐỌC) */}
                 <View style={styles.contentSection}>
 
@@ -209,14 +258,14 @@ const BodyShapeScreen = ({ route, navigation }) => {
             <View style={[styles.bottomFloating, { backgroundColor: theme.background }]}>
                 <TouchableOpacity 
                     style={[styles.saveBtn, { backgroundColor: theme.primary }]} 
-                    onPress={() => navigation.navigate('MainApp', { screen: 'Profile' })}
+                    onPress={() => navigation.navigate('MainApp', { screen: 'Wardrobe' })}
                 >
                     <Text style={[styles.saveBtnText, { color: '#FFF' }]}>Áp dụng vào Tủ đồ</Text>
                     <Ionicons name="arrow-forward" size={18} color="#FFF" style={{ marginLeft: 8 }} />
                 </TouchableOpacity>
             </View>
 
-            {/* MODAL CHỌN LẠI DÁNG NGƯỜI (ĐÃ FIX LỖI TEXT) */}
+            {/* MODAL CHỌN LẠI DÁNG NGƯỜI */}
             <Modal visible={isManualModalVisible} transparent={true} animationType="fade">
                 <View style={styles.modalBgCenter}>
                     <View style={[styles.modalBox, { backgroundColor: theme.background }]}>
@@ -232,7 +281,6 @@ const BodyShapeScreen = ({ route, navigation }) => {
                         
                         <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
                             {MANUAL_SHAPES.map((shape, index) => {
-                                // 🟢 XỬ LÝ TEXT TRÀN: Tách tên tiếng Việt và tiếng Anh ra 2 dòng
                                 const splitName = shape.name.split(' (');
                                 const nameVN = splitName[0];
                                 const nameEN = splitName[1] ? splitName[1].replace(')', '') : '';
@@ -264,13 +312,9 @@ const BodyShapeScreen = ({ route, navigation }) => {
 
 const styles = StyleSheet.create({
     container: { flex: 1 },
-    
-    // Header Nổi
     headerAbsolute: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, zIndex: 10 },
     backBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
     tuneBtn: { width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
-    
-    // Loading & Error
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
     radarBox: { width: 90, height: 90, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 24 },
     scanningText: { fontFamily: FONTS.bold, fontSize: 16, letterSpacing: 0.5 },
@@ -278,57 +322,106 @@ const styles = StyleSheet.create({
     errorSubText: { fontFamily: FONTS.regular, fontSize: 14, textAlign: 'center', marginBottom: 32, lineHeight: 22, paddingHorizontal: 20 },
     btnRetry: { paddingVertical: 14, paddingHorizontal: 30, borderRadius: 20 },
     btnRetryText: { fontFamily: FONTS.bold, fontSize: 15 },
-    
-    // Image Section
     heroSection: { height: height * 0.4, width: '100%', alignItems: 'center', justifyContent: 'flex-end', paddingTop: 80, paddingBottom: 20 },
     sketchImage: { width: '80%', height: '100%', opacity: 0.9 },
-    
-    // Title Section
     titleSection: { paddingHorizontal: 24, paddingTop: 10, paddingBottom: 20, alignItems: 'center' },
     subTitleText: { fontFamily: FONTS.bold, fontSize: 12, letterSpacing: 2, marginBottom: 6 },
     mainTitleText: { fontFamily: FONTS.bold, fontSize: 32, marginBottom: 16, textAlign: 'center', letterSpacing: -0.5 },
     descText: { fontFamily: FONTS.regular, fontSize: 15, lineHeight: 26, textAlign: 'center', opacity: 0.8 },
-    
-    // Content Layout
     contentSection: { paddingHorizontal: 24 },
-    
-    // Ưu điểm
     advantageBox: { padding: 20, borderRadius: 20, borderLeftWidth: 4, marginBottom: 32 },
     advantageText: { fontFamily: FONTS.medium, fontSize: 15, lineHeight: 24, marginBottom: 6 },
-    
-    // Gợi ý & Cần tránh
     sectionBlock: { marginBottom: 35 },
     sectionHeading: { fontFamily: FONTS.bold, fontSize: 20, marginBottom: 16, letterSpacing: -0.3 },
-    
     cardList: { gap: 12 },
     doCard: { flexDirection: 'row', padding: 16, borderRadius: 20, alignItems: 'center' },
     doIconBg: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginRight: 14 },
     doTextWrap: { flex: 1 },
     doTitle: { fontFamily: FONTS.bold, fontSize: 15, marginBottom: 4 },
     doDesc: { fontFamily: FONTS.regular, fontSize: 13, lineHeight: 20 },
-
     dontRow: { flexDirection: 'row', paddingVertical: 14, borderBottomWidth: 1, alignItems: 'center' },
     dontText: { fontFamily: FONTS.medium, fontSize: 14, lineHeight: 22, flex: 1, marginLeft: 12 },
-
-    // FAB Button
     bottomFloating: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 24, paddingVertical: 20, borderTopLeftRadius: 24, borderTopRightRadius: 24 },
     saveBtn: { flexDirection: 'row', paddingVertical: 16, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
     saveBtnText: { fontFamily: FONTS.bold, fontSize: 16, letterSpacing: 0.5 },
-
-    // Modal
     modalBgCenter: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
     modalBox: { width: '90%', borderRadius: 32, padding: 24, maxHeight: height * 0.75 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 24 },
     modalTitle: { fontFamily: FONTS.bold, fontSize: 20, marginBottom: 4 },
     modalSub: { fontFamily: FONTS.regular, fontSize: 13 },
     closeIconBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(150,150,150,0.1)', justifyContent: 'center', alignItems: 'center' },
-    
-    // Chỗ sửa lõi Flexbox chống tràn chữ đây
     shapeOption: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 20, marginBottom: 12, borderWidth: 1 },
     shapeIconWrap: { width: 44, height: 44, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     shapeTextWrap: { flex: 1, paddingHorizontal: 14 },
     shapeOptionTitle: { fontFamily: FONTS.bold, fontSize: 15, marginBottom: 2 },
     shapeOptionSub: { fontFamily: FONTS.regular, fontSize: 12, opacity: 0.7 },
+    
+    // 🟢 THÀNH PHẦN THEME STYLES CHO KHỐI THÔNG SỐ AI MỚI BỔ SUNG
+    metricsWrapper: {
+        paddingHorizontal: 24,
+        marginBottom: 28,
+    },
+    metricsContainer: {
+        borderRadius: 24,
+        borderWidth: 1,
+        padding: 18,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        elevation: 2,
+    },
+    metricsHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 16,
+        gap: 6,
+    },
+    metricsTitle: {
+        fontFamily: FONTS.bold,
+        fontSize: 10,
+        letterSpacing: 1.2,
+        opacity: 0.9,
+    },
+    metricsGrid: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 6,
+    },
+    metricCard: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    metricLabel: {
+        fontFamily: FONTS.medium,
+        fontSize: 12,
+        marginBottom: 6,
+    },
+    metricValue: {
+        fontFamily: FONTS.bold,
+        fontSize: 18,
+        letterSpacing: -0.3,
+    },
+    metricDivider: {
+        width: 1,
+        height: 28,
+        opacity: 0.7,
+    },
+    techFooter: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginTop: 14,
+        paddingTop: 12,
+        borderTopWidth: 0.5,
+        gap: 6,
+    },
+    techFooterText: {
+        fontFamily: FONTS.regular,
+        fontSize: 10.5,
+        opacity: 0.7,
+    },
 });
 
 export default BodyShapeScreen;

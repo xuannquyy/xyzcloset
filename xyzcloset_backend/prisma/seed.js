@@ -227,17 +227,17 @@ async function main() {
     console.log('👗 Đang kiểm tra và nạp Danh mục Quần Áo (Categories)...');
     const categoriesToSeed = [
         { name: 'Áo thun/T-shirt', iconUrl: 'https://cdn-icons-png.flaticon.com/512/863/863684.png' },
-        { name: 'Áo sơ mi/Blouse', iconUrl: 'https://cdn-icons-png.flaticon.com/512/2806/2806051.png' },
-        { name: 'Áo len/Nỉ', iconUrl: 'https://cdn.vuahanghieu.com/unsafe/0x900/left/top/smart/filters:quality(90)/https://admin.vuahanghieu.com/upload/product/2024/11/ao-ni-sweater-mlb-basic-small-logo-overfit-fleece-man-to-man-new-york-mets-3amtb0646-09mgs-mau-ghi-673167aac4fa0-11112024091050.jpg' },
-        { name: 'Áo khoác (Jacket/Coat)', iconUrl: 'https://img.pikbest.com/wp/202413/outline-sketch-drawing-of-a-boy-s-jacket-vector_10475550.jpg!sw800' },
-        { name: 'Quần dài (Jeans/Trousers)', iconUrl: 'https://img.icons8.com/?size=100&id=1172&format=png&color=000000' },
-        { name: 'Quần ngắn (Shorts)', iconUrl: 'https://img.icons8.com/ios/100/shorts.png' },
+        { name: 'Áo sơ mi/Blouse', iconUrl: 'https://img.icons8.com/sf-ultralight/512/shirt.png' },
+        { name: 'Áo len/Nỉ', iconUrl: 'https://img.icons8.com/carbon-copy/512/sweater.png' },
+        { name: 'Áo khoác (Jacket/Coat)', iconUrl: 'https://img.icons8.com/badges/512/jacket.png' },
+        { name: 'Quần dài (Jeans/Trousers)', iconUrl: 'https://img.icons8.com/ios/512/trousers.png' },
+        { name: 'Quần ngắn (Shorts)', iconUrl: 'https://img.icons8.com/ios/512/shorts.png' },
         { name: 'Váy/Đầm (Dress)', iconUrl: 'https://cdn-icons-png.flaticon.com/512/1785/1785255.png' },
-        { name: 'Chân váy (Skirt)', iconUrl: 'https://thumb.silhouette-ac.com/t/37/37120be0ec7335db9f18a706e3ac4f6d_t.jpeg' },
-        { name: 'Giày/Dép', iconUrl: 'https://thumb.silhouette-ac.com/t/33/3359cdc20d49f36847317c069b7ce48c_t.jpeg' },
-        { name: 'Túi xách/Balo', iconUrl: 'https://smartones.com.vn/wp-content/uploads/2021/05/pngtree-backpack-icon-design-template-vector-isolated-png-image-746869.jpeg' },
-        { name: 'Phụ kiện (Mũ, Kính, Trang sức)', iconUrl: 'https://topsi.vn/uploads/images/categories/4n5ASq1liPZkX3amjYwRgfehK0PHab22q2uYhDlt.png' },
-        { name: 'Đồ thể thao/Bơi', iconUrl: 'https://cdn.shopify.com/s/files/1/0456/5070/6581/files/8-135410001-1_540x.jpg?v=1705468799' }
+        { name: 'Chân váy (Skirt)', iconUrl: 'https://img.icons8.com/carbon-copy/512/skirt.png' },
+        { name: 'Giày/Dép', iconUrl: 'https://img.icons8.com/external-photo3ideastudio-lineal-photo3ideastudio/512/external-shoe-clothes-photo3ideastudio-lineal-photo3ideastudio.png' },
+        { name: 'Túi xách/Balo', iconUrl: 'https://img.icons8.com/ios/512/bag-front-view.png' },
+        { name: 'Phụ kiện (Mũ, Kính, Trang sức)', iconUrl: 'https://img.icons8.com/ios/512/glasses.png' },
+        { name: 'Đồ thể thao/Bơi', iconUrl: 'https://img.icons8.com/external-goofy-line-kerismaker/512/external-Swimsuit-travel-tourism-goofy-line-kerismaker.png' }
     ];
 
     for (const cat of categoriesToSeed) {
@@ -346,7 +346,7 @@ async function main() {
                 ],
                 toAvoid: ["Quần Skinny bó sát làm lộ nhược điểm hông to.", "Chân váy bút chì sáng màu làm phần thân dưới trông nặng nề hơn."]
             }),
-            illustrationUrl: 'https://img2.dilyno.com/SnCYc0f5ttspv62sT5wo9aCRIyPLz1qJ9Zb8-wDqpxw/rs:fill:428:800:0/aHR0cHM6Ly9zMy1kaWx5LXdlYi5kaWx5bm8uY29tL3dlYmVjb20vMjAyMy8wNC8yNzk4MDM2YTEyZTAwZWQ0NjkxNWNlMWUwYjBiMjM2OS5qcGc.jpg'
+            illustrationUrl: 'https://i.pinimg.com/736x/f5/fa/df/f5fadf44d985c9af6d6130445c730223.jpg'
         },
         {
             shapeName: 'Dáng Đồng Hồ Cát (Hourglass)',
@@ -361,7 +361,7 @@ async function main() {
                 ],
                 toAvoid: ["Đồ quá rộng (Oversize) làm mất đường cong.", "Trang phục cổ thuyền cao làm vai trông thô hơn."]
             }),
-            illustrationUrl: 'https://institute.htfitness.vn/wp-content/uploads/2024/08/hourglass-body-shape-of-womenhourglass-body-shape-of-women.jpg.webp'
+            illustrationUrl: 'https://i.pinimg.com/736x/a4/e5/88/a4e5882b7ac55a63ea9287b9182fa7b7.jpg'
         },
         {
             shapeName: 'Dáng Chữ Nhật (Rectangle)',
