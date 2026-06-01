@@ -24,6 +24,7 @@ import BodyShapeScreen from '../screens/BodyShapeScreen';
 import NotificationScreen from '../screens/NotificationScreen';
 import ItemDetailScreen from '../screens/ItemDetailScreen';
 import InsightsScreen from '../screens/InsightsScreen';
+import OutfitScreen from '../screens/OutfitScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -59,6 +60,7 @@ const AppContent = () => {
                         <Stack.Screen name="Notification" component={NotificationScreen} />
                         <Stack.Screen name="ItemDetail" component={ItemDetailScreen} />
                         <Stack.Screen name="Insights" component={InsightsScreen} />
+                        <Stack.Screen name="Outfit" component={OutfitScreen} />
                     </>
                 ) : (
                     <>

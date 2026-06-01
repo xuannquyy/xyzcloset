@@ -5,7 +5,6 @@ const prisma = new PrismaClient();
 const createOutfit = async (req, res) => {
     try {
         const userId = req.userId;
-        // 🟢 Bổ sung tagIds vào req.body
         const { name, wardrobeItemIds, tagIds } = req.body;
 
         if (!req.file) {
@@ -19,7 +18,6 @@ const createOutfit = async (req, res) => {
             catch { parsedItemIds = Array.isArray(wardrobeItemIds) ? wardrobeItemIds : [wardrobeItemIds]; }
         }
 
-        // 🟢 Xử lý mảng Tag
         let parsedTagIds = [];
         if (tagIds) {
             try { parsedTagIds = JSON.parse(tagIds); } 
@@ -31,8 +29,13 @@ const createOutfit = async (req, res) => {
                 name,
                 canvasImageUrl,
                 userId,
-                wardrobeItemIds: parsedItemIds,
-                tagIds: parsedTagIds // 🟢 Lưu Tag vào DB
+                // ✅ ĐÃ SỬA THÀNH CONNECT ĐỂ PRISMA ĐỒNG BỘ 2 CHIỀU
+                wardrobeItems: {
+                    connect: parsedItemIds.map(id => ({ id: id }))
+                },
+                tags: {
+                    connect: parsedTagIds.map(id => ({ id: id }))
+                }
             }
         });
 

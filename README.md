@@ -68,6 +68,7 @@ npm install cloudinary multer multer-storage-cloudinary --legacy-peer-deps
 npm install nodemailer --legacy-peer-deps
 npm install axios --legacy-peer-deps
 npm install replicate --legacy-peer-deps
+npm install node-cron node-fetch --legacy-peer-deps
 # Khởi tạo Prisma kết nối với MongoDB:
 npx prisma init
 # (Để hệ thống nhận diện cấu trúc mới).

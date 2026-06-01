@@ -1,9 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { 
-    StyleSheet, View, Text, FlatList, TouchableOpacity, 
-    ActivityIndicator, RefreshControl 
-} from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { StyleSheet, View, Text, FlatList, TouchableOpacity, ActivityIndicator, RefreshControl } from 'react-native';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import ScreenWrapper from '../components/ScreenWrapper';
 import { FONTS, SIZES } from '../theme/theme';
 import { SettingsContext } from '../context/SettingsContext';
@@ -14,86 +11,70 @@ const NotificationScreen = ({ navigation }) => {
     const [notifications, setNotifications] = useState([]);
     const [isLoading, setIsLoading] = useState(true);
     const [refreshing, setRefreshing] = useState(false);
+    const [activeTab, setActiveTab] = useState('ALL'); // 'ALL', 'WEATHER', 'SYSTEM'
 
-    // 1. GỌI API LẤY DANH SÁCH THÔNG BÁO TỪ BACKEND
     const fetchNotifications = async () => {
         try {
             const res = await axiosClient.get('/notifications');
-            // Sắp xếp thông báo mới nhất lên đầu
             const sortedData = res.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
             setNotifications(sortedData);
         } catch (error) {
             console.log("Lỗi tải thông báo:", error);
         } finally {
-            setIsLoading(false);
-            setRefreshing(false);
+            setIsLoading(false); setRefreshing(false);
         }
     };
 
-    useEffect(() => {
-        fetchNotifications();
-    }, []);
+    useEffect(() => { fetchNotifications(); }, []);
+    const onRefresh = () => { setRefreshing(true); fetchNotifications(); };
 
-    const onRefresh = () => {
-        setRefreshing(true);
-        fetchNotifications();
-    };
-
-    // 2. GỌI API ĐÁNH DẤU LÀ ĐÃ ĐỌC (Tắt chấm đỏ)
     const handleMarkAsRead = async (id, isRead) => {
-        if (isRead) return; // Nếu đọc rồi thì không gọi API nữa
+        if (isRead) return;
         try {
             await axiosClient.put(`/notifications/${id}/read`);
-            
-            // Cập nhật state nội bộ ngay lập tức để UI mượt mà, không cần tải lại trang
-            setNotifications(prev => 
-                prev.map(item => item.id === id ? { ...item, isRead: true } : item)
-            );
+            setNotifications(prev => prev.map(item => item.id === id ? { ...item, isRead: true } : item));
         } catch (error) {
             console.log("Lỗi đánh dấu đã đọc:", error);
         }
     };
 
-    // Giao diện cho từng dòng thông báo
-    const renderItem = ({ item }) => {
-        // Nếu chưa đọc thì nền màu hồng/tím nhạt, đọc rồi thì nền tiệp màu app
-        const cardBgColor = item.isRead 
-            ? theme.background 
-            : (theme.background === '#121212' ? '#2A1F2D' : '#FFF0F0');
+    const getIconForType = (type) => {
+        switch(type) {
+            case 'WEATHER': return <MaterialCommunityIcons name="weather-partly-cloudy" size={24} color={theme.accent} />;
+            case 'OUTFIT': return <Ionicons name="shirt-outline" size={24} color={theme.accent} />;
+            default: return <Ionicons name="information-circle-outline" size={24} color={theme.primary} />;
+        }
+    };
 
+    const filteredData = activeTab === 'ALL' ? notifications : notifications.filter(n => n.type === activeTab);
+
+    const renderItem = ({ item }) => {
+        const cardBgColor = item.isRead ? theme.background : theme.card;
+        
         return (
             <TouchableOpacity 
-                style={[styles.notificationCard, { backgroundColor: cardBgColor, borderColor: theme.border }]}
+                style={[styles.notificationCard, { backgroundColor: cardBgColor, borderColor: theme.card }]}
                 onPress={() => handleMarkAsRead(item.id, item.isRead)}
             >
-                <View style={styles.iconContainer}>
-                    <Ionicons 
-                        name={item.isRead ? "notifications-outline" : "notifications"} 
-                        size={24} 
-                        color={theme.primary} 
-                    />
+                <View style={[styles.iconContainer, { backgroundColor: theme.background }]}>
+                    {getIconForType(item.type)}
                 </View>
                 <View style={styles.contentContainer}>
                     <Text style={[styles.title, { color: theme.text, fontFamily: item.isRead ? FONTS.medium : FONTS.bold }]}>
                         {item.title}
                     </Text>
-                    <Text style={[styles.message, { color: theme.gray }]}>{item.message}</Text>
-                    
-                    {/* Hiển thị ngày tháng */}
+                    <Text style={[styles.message, { color: theme.text, opacity: 0.8 }]}>{item.message}</Text>
                     <Text style={[styles.time, { color: theme.primary }]}>
                         {new Date(item.createdAt).toLocaleDateString(language === 'vi' ? 'vi-VN' : 'en-US')}
                     </Text>
                 </View>
-
-                {/* Dấu chấm đỏ báo chưa đọc */}
-                {!item.isRead && <View style={styles.unreadDot} />}
+                {!item.isRead && <View style={[styles.unreadDot, { backgroundColor: theme.accent }]} />}
             </TouchableOpacity>
         );
     };
 
     return (
         <ScreenWrapper style={{ backgroundColor: theme.background }}>
-            {/* HEADER */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={28} color={theme.text} />
@@ -104,24 +85,34 @@ const NotificationScreen = ({ navigation }) => {
                 <View style={{ width: 28 }} />
             </View>
 
-            {/* DANH SÁCH THÔNG BÁO */}
+            {/* TAB BAR TÙY CHỈNH */}
+            <View style={styles.tabContainer}>
+                {['ALL', 'WEATHER', 'SYSTEM'].map(tab => (
+                    <TouchableOpacity 
+                        key={tab} 
+                        style={[styles.tabBtn, activeTab === tab && { backgroundColor: theme.primary }]}
+                        onPress={() => setActiveTab(tab)}
+                    >
+                        <Text style={[styles.tabText, { color: activeTab === tab ? theme.background : theme.text }]}>
+                            {tab === 'ALL' ? 'Tất cả' : tab === 'WEATHER' ? 'Gợi ý' : 'Hệ thống'}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+
             {isLoading ? (
-                <View style={styles.centerContainer}>
-                    <ActivityIndicator size="large" color={theme.primary} />
-                </View>
+                <View style={styles.centerContainer}><ActivityIndicator size="large" color={theme.primary} /></View>
             ) : (
                 <FlatList
-                    data={notifications}
+                    data={filteredData}
                     keyExtractor={(item) => item.id.toString()}
                     renderItem={renderItem}
                     contentContainerStyle={styles.listContainer}
                     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
                     ListEmptyComponent={() => (
                         <View style={styles.centerContainer}>
-                            <Ionicons name="notifications-off-outline" size={60} color={theme.border} />
-                            <Text style={[styles.emptyText, { color: theme.gray }]}>
-                                {language === 'vi' ? "Bạn không có thông báo nào." : "You have no notifications."}
-                            </Text>
+                            <Ionicons name="notifications-off-outline" size={60} color={theme.card} />
+                            <Text style={[styles.emptyText, { color: theme.text, opacity: 0.5 }]}>Không có thông báo nào.</Text>
                         </View>
                     )}
                 />
@@ -131,19 +122,22 @@ const NotificationScreen = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 10, paddingBottom: 20 },
+    header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 24, paddingTop: 10, paddingBottom: 20 },
     backBtn: { padding: 5, marginLeft: -5 },
     headerTitle: { fontFamily: FONTS.bold, fontSize: 20 },
+    tabContainer: { flexDirection: 'row', paddingHorizontal: 24, marginBottom: 16 },
+    tabBtn: { paddingVertical: 8, paddingHorizontal: 16, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: 'transparent' },
+    tabText: { fontFamily: FONTS.bold, fontSize: 13 },
     centerContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: '40%' },
-    listContainer: { paddingHorizontal: 20, paddingBottom: 50 },
-    notificationCard: { flexDirection: 'row', padding: 15, borderRadius: SIZES.radius, marginBottom: 15, borderWidth: 1, elevation: 1 },
-    iconContainer: { marginRight: 15, justifyContent: 'center' },
-    contentContainer: { flex: 1 },
-    title: { fontSize: 15, marginBottom: 5 },
+    listContainer: { paddingHorizontal: 24, paddingBottom: 50 },
+    notificationCard: { flexDirection: 'row', padding: 16, borderRadius: 24, marginBottom: 12, borderWidth: 1 },
+    iconContainer: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', marginRight: 16 },
+    contentContainer: { flex: 1, justifyContent: 'center' },
+    title: { fontSize: 16, marginBottom: 4 },
     message: { fontFamily: FONTS.regular, fontSize: 14, lineHeight: 20, marginBottom: 8 },
     time: { fontFamily: FONTS.medium, fontSize: 12 },
-    unreadDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF4B4B', alignSelf: 'center', marginLeft: 10 },
-    emptyText: { fontFamily: FONTS.regular, fontSize: 15, marginTop: 15 }
+    unreadDot: { width: 10, height: 10, borderRadius: 5, alignSelf: 'center', marginLeft: 10 },
+    emptyText: { fontFamily: FONTS.medium, fontSize: 15, marginTop: 15 }
 });
 
 export default NotificationScreen;
