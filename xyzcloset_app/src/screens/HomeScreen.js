@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { 
     StyleSheet, View, Text, TouchableOpacity, ScrollView, 
     ActivityIndicator, RefreshControl, Linking, Modal, TextInput,
-    Platform
+    Platform, Animated
 } from 'react-native';
 import { Image } from 'expo-image'; 
 import * as Location from 'expo-location'; 
@@ -48,6 +48,39 @@ const HomeScreen = ({ navigation }) => {
     const [customAlert, setCustomAlert] = useState({ visible: false, title: '', message: '', type: 'error' });
     const showAlert = (title, message, type = 'error') => setCustomAlert({ visible: true, title, message, type });
 
+    // --- QUẢN LÝ TRẠNG THÁI ANIMATION THÔNG BÁO TIN NHẮN ---
+    const bannerAnim = useRef(new Animated.Value(-200)).current; // Vị trí ẩn phía trên đỉnh
+    const [showBanner, setShowBanner] = useState(false);
+    const [bannerData, setBannerData] = useState(null);
+
+    const triggerNotificationBanner = (suggestionData) => {
+        // Nếu không có gợi ý đồ từ API, không hiện banner để tránh lỗi UI
+        if (!suggestionData || !suggestionData.suggestion?.top) return;
+        
+        setBannerData(suggestionData);
+        setShowBanner(true);
+        
+        // 1. Trượt xuống vị trí hiển thị (Cân đối theo tai thỏ iOS / Android)
+        Animated.timing(bannerAnim, {
+            toValue: Platform.OS === 'ios' ? 55 : 25,
+            duration: 450,
+            useNativeDriver: true,
+        }).start();
+
+        // 2. Thiết lập tự động ẩn sau 5 giây (ộng thêm thời gian trượt là 5.5s)
+        setTimeout(() => {
+            dismissBanner();
+        }, 5500);
+    };
+
+    const dismissBanner = () => {
+        Animated.timing(bannerAnim, {
+            toValue: -200, // Trượt ngược lên trên để ẩn
+            duration: 350,
+            useNativeDriver: true,
+        }).start(() => setShowBanner(false));
+    };
+
     // 🟢 ĐÃ FIX LỖI MEMORY LEAK: Bỏ unreadNotifications khỏi dependency array để không bị reset interval liên tục gây lag
     useEffect(() => {
         const checkNotifications = async () => {
@@ -81,6 +114,13 @@ const HomeScreen = ({ navigation }) => {
             setData(suggestionRes.data);
             const allItems = wardrobeRes.data || [];
             setRecentItems(allItems.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).slice(0, 5));
+
+            // Bắn thông báo đẩy dạng tin nhắn ra màn hình sau khi tải dữ liệu xong 1 giây
+            if (suggestionRes.data) {
+                setTimeout(() => {
+                    triggerNotificationBanner(suggestionRes.data);
+                }, 1000);
+            }
         } catch (error) {
         } finally {
             setIsLoading(false); setRefreshing(false);
@@ -133,8 +173,53 @@ const HomeScreen = ({ navigation }) => {
     const highlightBg = theme.primary;
     const highlightText = theme.background; 
 
+    // Xác định màu sắc chủ đạo của loại thông báo (Nóng -> Cam, Mát -> Xanh)
+    const isHotWeather = bannerData?.weather?.temp ? parseFloat(bannerData.weather.temp) >= 25 : true;
+    const bannerAccentColor = isHotWeather ? '#FF9F43' : '#10AC84';
+
     return (
         <ScreenWrapper style={{ backgroundColor: theme.background }}>
+            
+            {/* 🔔 BANNER THÔNG BÁO ĐẨY TIN NHẮN (SLIDE DOWN BANNER) */}
+            {showBanner && bannerData && (
+                <Animated.View style={[
+                    styles.bannerContainer, 
+                    { 
+                        transform: [{ translateY: bannerAnim }],
+                        backgroundColor: isDarkMode ? '#1E1E1E' : '#FFFFFF',
+                        borderColor: isDarkMode ? '#333333' : '#F0F0F0',
+                        borderLeftColor: bannerAccentColor
+                    }
+                ]}>
+                    <View style={styles.bannerHeader}>
+                        <View style={[styles.bannerIconBadge, { backgroundColor: bannerAccentColor + '20' }]}>
+                            <Ionicons name={isHotWeather ? "sunny" : "shirt"} size={16} color={bannerAccentColor} />
+                        </View>
+                        <Text style={[styles.bannerAppTitle, { color: theme.text, opacity: 0.5 }]}>GỢI Ý HÔM NAY</Text>
+                        <TouchableOpacity onPress={dismissBanner} style={{ padding: 2 }}>
+                            <Ionicons name="close" size={18} color={theme.text} style={{ opacity: 0.6 }} />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <Text style={[styles.bannerTitle, { color: theme.text }]}>
+                        {isHotWeather ? 'Hôm nay mặc gì cho mát? 👕' : 'Gợi ý phối đồ giữ ấm 🧥'}
+                    </Text>
+                    <Text style={[styles.bannerMessage, { color: theme.text, opacity: 0.8 }]} numberOfLines={2}>
+                        {bannerData.message}
+                    </Text>
+
+                    {/* Hiển thị nhanh 2 mẫu quần áo được gợi ý từ tủ đồ */}
+                    <View style={styles.bannerPreviewRow}>
+                        {bannerData.suggestion?.top?.imageUrl && (
+                            <Image source={{ uri: bannerData.suggestion.top.imageUrl }} style={styles.bannerThumb} cachePolicy="memory-disk" />
+                        )}
+                        {bannerData.suggestion?.bottom?.imageUrl && (
+                            <Image source={{ uri: bannerData.suggestion.bottom.imageUrl }} style={styles.bannerThumb} cachePolicy="memory-disk" />
+                        )}
+                    </View>
+                </Animated.View>
+            )}
+
             <ScrollView 
                 showsVerticalScrollIndicator={false} 
                 refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={theme.primary} />}
@@ -191,7 +276,6 @@ const HomeScreen = ({ navigation }) => {
                         data.suggestion.top && data.suggestion.bottom ? (
                             <View style={styles.outfitGrid}>
                                 <View style={[styles.outfitCard, { backgroundColor: theme.card }]}>
-                                    {/* 🟢 ĐÃ FIX: Thay transition={300} bằng cachePolicy="memory-disk" để chống nhấp nháy ảnh */}
                                     <Image source={{ uri: data.suggestion.top.imageUrl }} style={styles.outfitImage} contentFit="cover" cachePolicy="memory-disk" />
                                     <View style={[styles.outfitTag, { backgroundColor: theme.background }]}>
                                         <Text style={[styles.tagText, { color: theme.text }]}>{t('top')}</Text>
@@ -339,6 +423,29 @@ const HomeScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
     scrollContent: { paddingHorizontal: 24, paddingTop: 10 },
     
+    // 🔔 Styles hệ thống Thông báo đẩy lơ lửng (Banner)
+    bannerContainer: {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        borderRadius: 20,
+        padding: 16,
+        zIndex: 9999, // Luôn đứng trên tất cả các lớp UI khác
+        elevation: 10,
+        borderWidth: 1,
+        borderLeftWidth: 6, // Tạo thanh viền màu nổi bật ở góc trái
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.3,
+        shadowRadius: 5,
+    },
+    bannerHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+    bannerIconBadge: { padding: 4, borderRadius: 8, marginRight: 8 },
+    bannerAppTitle: { flex: 1, fontFamily: FONTS.bold, fontSize: 11, letterSpacing: 1 },
+    bannerTitle: { fontFamily: FONTS.bold, fontSize: 15, marginBottom: 4, letterSpacing: -0.2 },
+    bannerMessage: { fontFamily: FONTS.regular, fontSize: 13, lineHeight: 18 },
+    bannerPreviewRow: { flexDirection: 'row', marginTop: 8, gap: 8 },
+    bannerThumb: { width: 42, height: 42, borderRadius: 8, backgroundColor: 'rgba(0,0,0,0.03)', resizeMode: 'contain' },
+
     // Header
     header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 },
     greetingText: { fontFamily: FONTS.medium, fontSize: 14, marginBottom: 2 },

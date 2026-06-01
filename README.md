@@ -63,7 +63,7 @@ cd xyzcloset_backend
 npm init -y
 # Cài các thư viện chạy chính
 npm install express cors dotenv jsonwebtoken bcrypt
-npm install prisma@5 @prisma/client@5 nodemon --save-dev
+npm install prisma@5 @prisma/client@5 nodemon --save-dev --legacy-peer-deps
 npm install cloudinary multer multer-storage-cloudinary --legacy-peer-deps
 npm install nodemailer --legacy-peer-deps
 npm install axios --legacy-peer-deps

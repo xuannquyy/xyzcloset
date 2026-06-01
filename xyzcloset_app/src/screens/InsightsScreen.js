@@ -28,8 +28,9 @@ const InsightsScreen = ({ navigation }) => {
     }, []);
 
     const stats = useMemo(() => {
-        if (wardrobeItems.length === 0) return { totalItems: 0, chartData: [] };
+        if (wardrobeItems.length === 0) return { totalItems: 0, chartData: [], mostWorn: null, leastWorn: null };
 
+        // 1. Phân loại Category cho biểu đồ
         const counts = wardrobeItems.reduce((acc, item) => {
             const catName = item.category?.name || 'Khác';
             acc[catName] = (acc[catName] || 0) + 1;
@@ -41,23 +42,24 @@ const InsightsScreen = ({ navigation }) => {
             population: counts[key],
         }));
 
-        const totalItems = wardrobeItems.length;
         const sorted = allData.sort((a, b) => b.population - a.population);
         const top5 = sorted.slice(0, 5);
         const others = sorted.slice(5).reduce((sum, item) => sum + item.population, 0);
-
         if (others > 0) top5.push({ name: 'Khác', population: others });
 
         const colors = [theme.primary, theme.accent, '#FF9F43', '#1DD1A1', '#54A0FF', theme.gray];
-
         const chartData = top5.map((item, index) => ({
-            ...item,
-            color: colors[index % colors.length],
-            legendFontColor: theme.text,
-            legendFontSize: 12
+            ...item, color: colors[index % colors.length], legendFontColor: theme.text, legendFontSize: 12
         }));
 
-        return { totalItems, chartData };
+        // 2. Tìm đồ mặc nhiều nhất/ít nhất dựa trên wearCount mới từ Prisma
+        // Lọc những item có wearCount > 0 để tính toán chính xác
+        const sortedByWear = [...wardrobeItems].sort((a, b) => (b.wearCount || 0) - (a.wearCount || 0));
+        
+        const mostWorn = sortedByWear[0]?.wearCount > 0 ? sortedByWear[0] : null;
+        const leastWorn = sortedByWear.filter(i => i.wearCount > 0).pop() || null;
+
+        return { totalItems: wardrobeItems.length, chartData, mostWorn, leastWorn };
     }, [wardrobeItems, theme]);
 
     if (isLoading) {
@@ -81,18 +83,35 @@ const InsightsScreen = ({ navigation }) => {
 
                 {/* Thống kê nhanh */}
                 <View style={styles.statsRow}>
-                    <View style={[styles.statBox, { backgroundColor: theme.white }]}>
+                    <View style={[styles.statBox, { backgroundColor: theme.card }]}>
                         <Text style={[styles.statValue, { color: theme.primary }]}>{stats.totalItems}</Text>
                         <Text style={[styles.statLabel, { color: theme.gray }]}>{t('total_outfits')}</Text>
                     </View>
-                    <View style={[styles.statBox, { backgroundColor: theme.white }]}>
+                    <View style={[styles.statBox, { backgroundColor: theme.card }]}>
                         <Text style={[styles.statValue, { color: theme.primary }]}>100%</Text>
                         <Text style={[styles.statLabel, { color: theme.gray }]}>{t('harmony')}</Text>
                     </View>
                 </View>
 
+                {/* Món đồ "Chân ái" & "Cần thanh lý" */}
+                <View style={styles.sectionBlock}>
+                    <Text style={[styles.sectionTitle, { color: theme.text }]}>Phân tích chuyên sâu</Text>
+                    <View style={styles.insightsGrid}>
+                        <View style={[styles.insightCard, { backgroundColor: theme.card }]}>
+                            <Ionicons name="heart" size={24} color="#E43F5A" />
+                            <Text style={[styles.insightLabel, { color: theme.gray }]}>Mặc nhiều nhất</Text>
+                            <Text numberOfLines={1} style={[styles.insightValue, { color: theme.text }]}>{stats.mostWorn?.name || 'Chưa mặc'}</Text>
+                        </View>
+                        <View style={[styles.insightCard, { backgroundColor: theme.card }]}>
+                            <Ionicons name="trash-outline" size={24} color={theme.gray} />
+                            <Text style={[styles.insightLabel, { color: theme.gray }]}>Cần thanh lý</Text>
+                            <Text numberOfLines={1} style={[styles.insightValue, { color: theme.text }]}>{stats.leastWorn?.name || 'Chưa mặc'}</Text>
+                        </View>
+                    </View>
+                </View>
+
                 {/* Biểu đồ */}
-                <View style={[styles.chartContainer, { backgroundColor: theme.white, padding: 15, borderRadius: 30 }]}>
+                <View style={[styles.chartContainer, { backgroundColor: theme.card, padding: 15, borderRadius: 30 }]}>
                     <Text style={[styles.sectionTitle, { color: theme.text }]}>{t('fav_colors')}</Text>
                     <PieChart
                         data={stats.chartData}
@@ -102,16 +121,14 @@ const InsightsScreen = ({ navigation }) => {
                         accessor={"population"}
                         backgroundColor={"transparent"}
                         paddingLeft={"15"}
-                        absolute={false}
                     />
                 </View>
                 
-                {/* AI Card liên kết trang Home */}
+                {/* AI Card */}
                 <View style={[styles.aiCard, { backgroundColor: theme.primary }]}>
                     <Ionicons name="sparkles" size={32} color={theme.accent} style={{ marginBottom: 15 }} />
                     <Text style={[styles.aiTitle, { color: '#FFF' }]}>{t('ai_suggestion_title')}</Text>
                     <Text style={[styles.aiDesc, { color: 'rgba(255,255,255,0.8)' }]}>{t('ai_suggestion_desc')}</Text>
-                    
                     <TouchableOpacity 
                         style={[styles.aiButton, { backgroundColor: theme.accent }]}
                         onPress={() => navigation.navigate('MainApp', { screen: 'Home' })}
@@ -128,16 +145,21 @@ const styles = StyleSheet.create({
     header: { flexDirection: 'row', alignItems: 'center', marginBottom: 30 },
     backBtn: { marginRight: 15 },
     title: { fontSize: 24, fontWeight: '800' },
-    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 30 },
-    statBox: { width: '48%', padding: 25, borderRadius: 30, alignItems: 'center', elevation: 3 },
+    statsRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 20 },
+    statBox: { width: '48%', padding: 25, borderRadius: 30, alignItems: 'center' },
     statValue: { fontSize: 32, fontWeight: '900' },
     statLabel: { fontSize: 11, marginTop: 5, textTransform: 'uppercase', letterSpacing: 1.5, fontWeight: '600' },
-    chartContainer: { alignItems: 'center', marginBottom: 30, elevation: 3 },
-    sectionTitle: { fontSize: 20, fontWeight: '800', marginBottom: 15, alignSelf: 'flex-start' },
+    sectionBlock: { marginBottom: 30 },
+    sectionTitle: { fontSize: 20, fontWeight: '800', marginBottom: 15 },
+    insightsGrid: { flexDirection: 'row', gap: 15 },
+    insightCard: { flex: 1, padding: 20, borderRadius: 25, alignItems: 'center' },
+    insightLabel: { fontSize: 11, marginTop: 10, marginBottom: 5 },
+    insightValue: { fontSize: 14, fontWeight: '700' },
+    chartContainer: { alignItems: 'center', marginBottom: 30 },
     aiCard: { padding: 30, borderRadius: 40, alignItems: 'flex-start' },
     aiTitle: { fontSize: 24, fontWeight: '800', marginBottom: 10 },
     aiDesc: { fontSize: 14, marginBottom: 20, lineHeight: 22 },
-    aiButton: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15, elevation: 5 },
+    aiButton: { paddingHorizontal: 25, paddingVertical: 12, borderRadius: 15 },
     aiBtnText: { fontWeight: '800', fontSize: 14 }
 });
 

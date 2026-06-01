@@ -8,18 +8,18 @@ datasource db {
 }
 
 model User {
-  id              String         @id @default(auto()) @map("_id") @db.ObjectId
-  fullName        String
-  email           String         @unique
-  password        String         
-  avatarUrl       String?
-  resetOtp        String?        
-  resetOtpExpiry  DateTime?      
-  createdAt       DateTime       @default(now())
+  id             String         @id @default(auto()) @map("_id") @db.ObjectId
+  fullName       String
+  email          String         @unique
+  password       String
+  avatarUrl      String?
+  resetOtp       String?
+  resetOtpExpiry DateTime?
+  createdAt      DateTime       @default(now())
 
-  wardrobeItems   WardrobeItem[]
-  outfits         Outfit[]
-  notifications   Notification[]
+  wardrobeItems  WardrobeItem[]
+  outfits        Outfit[]
+  notifications  Notification[]
 }
 
 model Category {
@@ -54,6 +54,9 @@ model WardrobeItem {
   name             String
   imageUrl         String
   isSampleItem     Boolean  @default(false)
+  
+  // TRƯỜNG MỚI ĐỂ THEO DÕI SỐ LẦN MẶC
+  wearCount        Int      @default(0)
   
   // Các trường chi tiết
   size             String?  
